@@ -22,7 +22,7 @@ let visibleColumns = [
 function formatDate(dateStr) {
     if (dateStr === "N/A") return "N/A";
     const date = new Date(dateStr);
-    return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    return isNaN(date) ? "N/A" : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 // Função debounce
@@ -168,6 +168,16 @@ function updateSortIndicators() {
     });
 }
 
+// Valida inputs numéricos
+function validateNumberInput(input) {
+    const value = input.value;
+    if (value && (isNaN(value) || value < 0)) {
+        input.classList.add('invalid');
+    } else {
+        input.classList.remove('invalid');
+    }
+}
+
 // Aplica filtros
 function applyFilters() {
     const deviceNameFilter = document.getElementById('deviceNameFilter').value.toLowerCase();
@@ -262,6 +272,7 @@ function clearFilters() {
     document.getElementById('totalStorageMax').value = '';
     document.getElementById('freeStorageMin').value = '';
     document.getElementById('freeStorageMax').value = '';
+    document.querySelectorAll('input').forEach(input => input.classList.remove('invalid'));
     applyFilters();
 }
 
@@ -276,9 +287,11 @@ function applyColumns() {
 function closeDropdowns(event) {
     if (!event.target.closest('.dropdown')) {
         document.getElementById('filterPanel').classList.add('hidden');
-        document.getElementById('toggleFilters').textContent = 'Filtros Avançados';
+        document.getElementById('toggleFilters').classList.remove('active');
+        document.getElementById('toggleFilters').querySelector('.arrow').textContent = '▼';
         document.getElementById('columnPanel').classList.add('hidden');
-        document.getElementById('toggleColumns').textContent = 'Selecionar Colunas';
+        document.getElementById('toggleColumns').classList.remove('active');
+        document.getElementById('toggleColumns').querySelector('.arrow').textContent = '▼';
     }
 }
 
@@ -296,14 +309,26 @@ document.getElementById('modelFilter').addEventListener('change', applyFilters);
 document.getElementById('complianceStateFilter').addEventListener('change', applyFilters);
 document.getElementById('lastSyncDateStart').addEventListener('change', applyFilters);
 document.getElementById('lastSyncDateEnd').addEventListener('change', applyFilters);
-document.getElementById('totalStorageMin').addEventListener('input', debouncedApplyFilters);
-document.getElementById('totalStorageMax').addEventListener('input', debouncedApplyFilters);
-document.getElementById('freeStorageMin').addEventListener('input', debouncedApplyFilters);
-document.getElementById('freeStorageMax').addEventListener('input', debouncedApplyFilters);
+document.getElementById('totalStorageMin').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
+document.getElementById('totalStorageMax').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
+document.getElementById('freeStorageMin').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
+document.getElementById('freeStorageMax').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
 document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
 document.getElementById('toggleView').addEventListener('click', () => {
     isGridView = !isGridView;
-    document.getElementById('toggleView').textContent = isGridView ? 'Ver como Lista' : 'Ver como Grade';
+    document.getElementById('toggleView').innerHTML = `<span class="icon">${isGridView ? '📋' : '🖼️'}</span> Ver como ${isGridView ? 'Lista' : 'Grade'}`;
     renderPage();
 });
 document.getElementById('prevPage').addEventListener('click', () => {
@@ -322,16 +347,20 @@ document.getElementById('nextPage').addEventListener('click', () => {
 document.getElementById('toggleFilters').addEventListener('click', () => {
     const filterPanel = document.getElementById('filterPanel');
     const isHidden = filterPanel.classList.toggle('hidden');
-    document.getElementById('toggleFilters').textContent = isHidden ? 'Filtros Avançados' : 'Esconder Filtros';
+    document.getElementById('toggleFilters').classList.toggle('active', !isHidden);
+    document.getElementById('toggleFilters').querySelector('.arrow').textContent = isHidden ? '▼' : '▲';
     document.getElementById('columnPanel').classList.add('hidden');
-    document.getElementById('toggleColumns').textContent = 'Selecionar Colunas';
+    document.getElementById('toggleColumns').classList.remove('active');
+    document.getElementById('toggleColumns').querySelector('.arrow').textContent = '▼';
 });
 document.getElementById('toggleColumns').addEventListener('click', () => {
     const columnPanel = document.getElementById('columnPanel');
     const isHidden = columnPanel.classList.toggle('hidden');
-    document.getElementById('toggleColumns').textContent = isHidden ? 'Selecionar Colunas' : 'Esconder Colunas';
+    document.getElementById('toggleColumns').classList.toggle('active', !isHidden);
+    document.getElementById('toggleColumns').querySelector('.arrow').textContent = isHidden ? '▼' : '▲';
     document.getElementById('filterPanel').classList.add('hidden');
-    document.getElementById('toggleFilters').textContent = 'Filtros Avançados';
+    document.getElementById('toggleFilters').classList.remove('active');
+    document.getElementById('toggleFilters').querySelector('.arrow').textContent = '▼';
 });
 document.getElementById('applyColumns').addEventListener('click', applyColumns);
 document.querySelectorAll('th').forEach(th => {
@@ -347,5 +376,5 @@ window.onload = () => {
     populateDropdowns();
     loadVisibleColumns();
     renderPage();
-    document.getElementById('toggleView').textContent = 'Ver como Grade';
+    document.getElementById('toggleView').innerHTML = '<span class="icon">🖼️</span> Ver como Grade';
 };
