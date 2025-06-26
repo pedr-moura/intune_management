@@ -12,6 +12,11 @@ let isGridView = false;
 let filteredDevices = [...devices];
 let sortKey = 'deviceName';
 let sortOrder = 'asc';
+let visibleColumns = [
+    'deviceName', 'userPrincipalName', 'operatingSystem', 'osVersion',
+    'manufacturer', 'model', 'serialNumber', 'lastSyncDateTime',
+    'complianceState', 'totalStorageGB', 'freeStorageGB'
+];
 
 // Função para formatar data
 function formatDate(dateStr) {
@@ -69,6 +74,33 @@ function populateDropdowns() {
     });
 }
 
+// Carrega colunas visíveis do localStorage
+function loadVisibleColumns() {
+    const savedColumns = localStorage.getItem('visibleColumns');
+    if (savedColumns) {
+        visibleColumns = JSON.parse(savedColumns);
+    }
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        checkbox.checked = visibleColumns.includes(checkbox.dataset.column);
+    });
+    updateTableColumns();
+}
+
+// Salva colunas visíveis no localStorage
+function saveVisibleColumns() {
+    localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
+}
+
+// Atualiza visibilidade das colunas
+function updateTableColumns() {
+    document.querySelectorAll('th, td').forEach(cell => {
+        const column = cell.dataset.column;
+        if (column) {
+            cell.style.display = visibleColumns.includes(column) ? '' : 'none';
+        }
+    });
+}
+
 // Renderiza página atual
 function renderPage() {
     showLoading(true);
@@ -82,14 +114,14 @@ function renderPage() {
                 <div class="device-card" title="Clique para detalhes">
                     <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}">
                     <h2>${device.deviceName}</h2>
-                    <p><strong>Usuário:</strong> ${device.userPrincipalName}</p>
-                    <p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>
-                    <p><strong>Fabricante:</strong> ${device.manufacturer}</p>
-                    <p><strong>Modelo:</strong> ${device.model}</p>
-                    <p><strong>Número de Série:</strong> ${device.serialNumber}</p>
-                    <p><strong>Última Sinc.:</strong> ${formatDate(device.lastSyncDateTime)}</p>
-                    <p><strong>Conformidade:</strong> ${device.complianceState}</p>
-                    <p><strong>Armazenamento:</strong> ${device.totalStorageGB} GB (Livre: ${device.freeStorageGB} GB)</p>
+                    ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName}</p>` : ''}
+                    ${visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>` : ''}
+                    ${visibleColumns.includes('manufacturer') ? `<p><strong>Fabricante:</strong> ${device.manufacturer}</p>` : ''}
+                    ${visibleColumns.includes('model') ? `<p><strong>Modelo:</strong> ${device.model}</p>` : ''}
+                    ${visibleColumns.includes('serialNumber') ? `<p><strong>Número de Série:</strong> ${device.serialNumber}</p>` : ''}
+                    ${visibleColumns.includes('lastSyncDateTime') ? `<p><strong>Última Sinc.:</strong> ${formatDate(device.lastSyncDateTime)}</p>` : ''}
+                    ${visibleColumns.includes('complianceState') ? `<p><strong>Conformidade:</strong> ${device.complianceState}</p>` : ''}
+                    ${visibleColumns.includes('totalStorageGB') || visibleColumns.includes('freeStorageGB') ? `<p><strong>Armazenamento:</strong> ${device.totalStorageGB} GB (Livre: ${device.freeStorageGB} GB)</p>` : ''}
                 </div>
             `).join('');
             document.getElementById('gridContainer').innerHTML = gridHtml;
@@ -98,30 +130,42 @@ function renderPage() {
         } else {
             const tableHtml = pageDevices.map(device => `
                 <tr title="Detalhes do dispositivo">
-                    <td>${device.deviceName}</td>
-                    <td>${device.userPrincipalName}</td>
-                    <td>${device.operatingSystem}</td>
-                    <td>${device.osVersion}</td>
-                    <td>${device.manufacturer}</td>
-                    <td>${device.model}</td>
-                    <td>${device.serialNumber}</td>
-                    <td>${formatDate(device.lastSyncDateTime)}</td>
-                    <td>${device.complianceState}</td>
-                    <td>${device.totalStorageGB}</td>
-                    <td>${device.freeStorageGB}</td>
+                    <td data-column="deviceName">${device.deviceName}</td>
+                    <td data-column="userPrincipalName">${device.userPrincipalName}</td>
+                    <td data-column="operatingSystem">${device.operatingSystem}</td>
+                    <td data-column="osVersion">${device.osVersion}</td>
+                    <td data-column="manufacturer">${device.manufacturer}</td>
+                    <td data-column="model">${device.model}</td>
+                    <td data-column="serialNumber">${device.serialNumber}</td>
+                    <td data-column="lastSyncDateTime">${formatDate(device.lastSyncDateTime)}</td>
+                    <td data-column="complianceState">${device.complianceState}</td>
+                    <td data-column="totalStorageGB">${device.totalStorageGB}</td>
+                    <td data-column="freeStorageGB">${device.freeStorageGB}</td>
                 </tr>
             `).join('');
             document.getElementById('tableBody').innerHTML = tableHtml;
             document.getElementById('devicesGrid').classList.add('hidden');
             document.getElementById('devicesTable').classList.remove('hidden');
+            updateTableColumns();
         }
 
         const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
         document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages} (${filteredDevices.length} dispositivos)`;
         document.getElementById('prevPage').disabled = currentPage === 1;
         document.getElementById('nextPage').disabled = currentPage === totalPages;
+        updateSortIndicators();
         showLoading(false);
     }, 100);
+}
+
+// Atualiza indicadores de ordenação
+function updateSortIndicators() {
+    document.querySelectorAll('th').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.column === sortKey) {
+            th.classList.add(`sort-${sortOrder}`);
+        }
+    });
 }
 
 // Aplica filtros
@@ -171,10 +215,14 @@ function applyFilters() {
 }
 
 // Ordena dispositivos
-function sortDevices() {
-    const sortSelect = document.getElementById('sortSelect');
-    sortKey = sortSelect.value;
-    sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+function sortDevices(key) {
+    if (sortKey === key) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortKey = key;
+        sortOrder = 'asc';
+    }
+    document.getElementById('sortSelect').value = key;
     filteredDevices.sort((a, b) => {
         let aValue = a[sortKey];
         let bValue = b[sortKey];
@@ -217,6 +265,23 @@ function clearFilters() {
     applyFilters();
 }
 
+// Aplica seleção de colunas
+function applyColumns() {
+    visibleColumns = Array.from(document.querySelectorAll('.column-toggle:checked')).map(cb => cb.dataset.column);
+    saveVisibleColumns();
+    renderPage();
+}
+
+// Fecha dropdowns ao clicar fora
+function closeDropdowns(event) {
+    if (!event.target.closest('.dropdown')) {
+        document.getElementById('filterPanel').classList.add('hidden');
+        document.getElementById('toggleFilters').textContent = 'Filtros Avançados';
+        document.getElementById('columnPanel').classList.add('hidden');
+        document.getElementById('toggleColumns').textContent = 'Selecionar Colunas';
+    }
+}
+
 // Adiciona eventos
 const debouncedApplyFilters = debounce(applyFilters, 300);
 document.getElementById('applyFilters').addEventListener('click', applyFilters);
@@ -235,7 +300,7 @@ document.getElementById('totalStorageMin').addEventListener('input', debouncedAp
 document.getElementById('totalStorageMax').addEventListener('input', debouncedApplyFilters);
 document.getElementById('freeStorageMin').addEventListener('input', debouncedApplyFilters);
 document.getElementById('freeStorageMax').addEventListener('input', debouncedApplyFilters);
-document.getElementById('sortSelect').addEventListener('change', sortDevices);
+document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
 document.getElementById('toggleView').addEventListener('click', () => {
     isGridView = !isGridView;
     document.getElementById('toggleView').textContent = isGridView ? 'Ver como Lista' : 'Ver como Grade';
@@ -256,13 +321,31 @@ document.getElementById('nextPage').addEventListener('click', () => {
 });
 document.getElementById('toggleFilters').addEventListener('click', () => {
     const filterPanel = document.getElementById('filterPanel');
-    filterPanel.classList.toggle('hidden');
-    document.getElementById('toggleFilters').textContent = filterPanel.classList.contains('hidden') ? 'Filtros Avançados' : 'Esconder Filtros';
+    const isHidden = filterPanel.classList.toggle('hidden');
+    document.getElementById('toggleFilters').textContent = isHidden ? 'Filtros Avançados' : 'Esconder Filtros';
+    document.getElementById('columnPanel').classList.add('hidden');
+    document.getElementById('toggleColumns').textContent = 'Selecionar Colunas';
 });
+document.getElementById('toggleColumns').addEventListener('click', () => {
+    const columnPanel = document.getElementById('columnPanel');
+    const isHidden = columnPanel.classList.toggle('hidden');
+    document.getElementById('toggleColumns').textContent = isHidden ? 'Selecionar Colunas' : 'Esconder Colunas';
+    document.getElementById('filterPanel').classList.add('hidden');
+    document.getElementById('toggleFilters').textContent = 'Filtros Avançados';
+});
+document.getElementById('applyColumns').addEventListener('click', applyColumns);
+document.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+        const column = th.dataset.column;
+        if (column) sortDevices(column);
+    });
+});
+document.addEventListener('click', closeDropdowns);
 
 // Inicialização
 window.onload = () => {
     populateDropdowns();
+    loadVisibleColumns();
     renderPage();
     document.getElementById('toggleView').textContent = 'Ver como Grade';
 };
