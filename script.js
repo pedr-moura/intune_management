@@ -2,24 +2,25 @@ const modelImages = {
     "Surface Pro 7": "https://via.placeholder.com/150?text=Surface+Pro+7",
     "Surface Laptop 4": "https://via.placeholder.com/150?text=Surface+Laptop+4",
     "iPhone 12": "https://via.placeholder.com/150?text=iPhone+12",
+    "Latitude 3400": "https://via.placeholder.com/150?text=Latitude+3400",
     "default": "https://via.placeholder.com/150?text=Sem+Imagem"
 };
 
 let currentPage = 1;
-const rowsPerPage = 100; // Aumentado para melhor desempenho com muitos dispositivos
+const rowsPerPage = 100;
 let isGridView = false;
-let filteredDevices = [...devices]; // Assume que 'devices' vem do JSON inline
+let filteredDevices = [...devices];
 let sortKey = 'deviceName';
 let sortOrder = 'asc';
 
-// Função para formatar data no padrão brasileiro
+// Função para formatar data
 function formatDate(dateStr) {
     if (dateStr === "N/A") return "N/A";
     const date = new Date(dateStr);
     return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-// Função debounce para otimizar busca
+// Função debounce
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -32,12 +33,43 @@ function debounce(func, wait) {
     };
 }
 
-// Exibe ou oculta o indicador de carregamento
+// Exibe/oculta loading
 function showLoading(show) {
     document.getElementById('loading').style.display = show ? 'block' : 'none';
 }
 
-// Renderiza apenas os dispositivos da página atual
+// Popula dropdowns com valores únicos
+function populateDropdowns() {
+    const operatingSystems = [...new Set(devices.map(d => d.operatingSystem).filter(v => v !== "N/A"))].sort();
+    const manufacturers = [...new Set(devices.map(d => d.manufacturer).filter(v => v !== "N/A"))].sort();
+    const models = [...new Set(devices.map(d => d.model).filter(v => v !== "N/A"))].sort();
+
+    const osSelect = document.getElementById('operatingSystemFilter');
+    operatingSystems.forEach(os => {
+        const option = document.createElement('option');
+        option.value = os;
+        option.textContent = os;
+        osSelect.appendChild(option);
+    });
+
+    const manufacturerSelect = document.getElementById('manufacturerFilter');
+    manufacturers.forEach(man => {
+        const option = document.createElement('option');
+        option.value = man;
+        option.textContent = man;
+        manufacturerSelect.appendChild(option);
+    });
+
+    const modelSelect = document.getElementById('modelFilter');
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        modelSelect.appendChild(option);
+    });
+}
+
+// Renderiza página atual
 function renderPage() {
     showLoading(true);
     setTimeout(() => {
@@ -89,17 +121,51 @@ function renderPage() {
         document.getElementById('prevPage').disabled = currentPage === 1;
         document.getElementById('nextPage').disabled = currentPage === totalPages;
         showLoading(false);
-    }, 100); // Atraso mínimo para feedback visual
+    }, 100);
 }
 
-// Filtra dispositivos com base na busca
-function filterDevices() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    filteredDevices = devices.filter(device =>
-        Object.values(device).some(value =>
-            value.toString().toLowerCase().includes(searchTerm)
-        )
-    );
+// Aplica filtros
+function applyFilters() {
+    const deviceNameFilter = document.getElementById('deviceNameFilter').value.toLowerCase();
+    const userPrincipalNameFilter = document.getElementById('userPrincipalNameFilter').value.toLowerCase();
+    const operatingSystemFilter = document.getElementById('operatingSystemFilter').value;
+    const osVersionFilter = document.getElementById('osVersionFilter').value.toLowerCase();
+    const manufacturerFilter = document.getElementById('manufacturerFilter').value;
+    const modelFilter = document.getElementById('modelFilter').value;
+    const serialNumberFilter = document.getElementById('serialNumberFilter').value.toLowerCase();
+    const lastSyncDateStart = document.getElementById('lastSyncDateStart').value;
+    const lastSyncDateEnd = document.getElementById('lastSyncDateEnd').value;
+    const complianceStateFilter = document.getElementById('complianceStateFilter').value;
+    const totalStorageMin = parseFloat(document.getElementById('totalStorageMin').value) || -Infinity;
+    const totalStorageMax = parseFloat(document.getElementById('totalStorageMax').value) || Infinity;
+    const freeStorageMin = parseFloat(document.getElementById('freeStorageMin').value) || -Infinity;
+    const freeStorageMax = parseFloat(document.getElementById('freeStorageMax').value) || Infinity;
+
+    filteredDevices = devices.filter(device => {
+        const deviceNameMatch = !deviceNameFilter || device.deviceName.toLowerCase().includes(deviceNameFilter);
+        const userPrincipalNameMatch = !userPrincipalNameFilter || device.userPrincipalName.toLowerCase().includes(userPrincipalNameFilter);
+        const operatingSystemMatch = !operatingSystemFilter || device.operatingSystem === operatingSystemFilter;
+        const osVersionMatch = !osVersionFilter || device.osVersion.toLowerCase().includes(osVersionFilter);
+        const manufacturerMatch = !manufacturerFilter || device.manufacturer === manufacturerFilter;
+        const modelMatch = !modelFilter || device.model === modelFilter;
+        const serialNumberMatch = !serialNumberFilter || device.serialNumber.toLowerCase().includes(serialNumberFilter);
+        const complianceStateMatch = !complianceStateFilter || device.complianceState === complianceStateFilter;
+        const totalStorageMatch = device.totalStorageGB >= totalStorageMin && device.totalStorageGB <= totalStorageMax;
+        const freeStorageMatch = device.freeStorageGB >= freeStorageMin && device.freeStorageGB <= freeStorageMax;
+        let lastSyncDateMatch = true;
+        if (lastSyncDateStart || lastSyncDateEnd) {
+            const syncDate = device.lastSyncDateTime !== "N/A" ? new Date(device.lastSyncDateTime) : null;
+            const startDate = lastSyncDateStart ? new Date(lastSyncDateStart) : null;
+            const endDate = lastSyncDateEnd ? new Date(lastSyncDateEnd) : null;
+            lastSyncDateMatch = syncDate && 
+                (!startDate || syncDate >= startDate) && 
+                (!endDate || syncDate <= endDate);
+        }
+        return deviceNameMatch && userPrincipalNameMatch && operatingSystemMatch && osVersionMatch &&
+               manufacturerMatch && modelMatch && serialNumberMatch && lastSyncDateMatch &&
+               complianceStateMatch && totalStorageMatch && freeStorageMatch;
+    });
+
     currentPage = 1;
     renderPage();
 }
@@ -118,6 +184,9 @@ function sortDevices() {
         } else if (sortKey === 'totalStorageGB' || sortKey === 'freeStorageGB') {
             aValue = parseFloat(aValue);
             bValue = parseFloat(bValue);
+        } else {
+            aValue = aValue.toString().toLowerCase();
+            bValue = bValue.toString().toLowerCase();
         }
         if (aValue === "N/A" || bValue === "N/A") {
             return aValue === bValue ? 0 : aValue === "N/A" ? 1 : -1;
@@ -129,11 +198,43 @@ function sortDevices() {
     renderPage();
 }
 
-// Adiciona debounce à busca
-const debouncedFilter = debounce(filterDevices, 300);
+// Limpa filtros
+function clearFilters() {
+    document.getElementById('deviceNameFilter').value = '';
+    document.getElementById('userPrincipalNameFilter').value = '';
+    document.getElementById('operatingSystemFilter').value = '';
+    document.getElementById('osVersionFilter').value = '';
+    document.getElementById('manufacturerFilter').value = '';
+    document.getElementById('modelFilter').value = '';
+    document.getElementById('serialNumberFilter').value = '';
+    document.getElementById('lastSyncDateStart').value = '';
+    document.getElementById('lastSyncDateEnd').value = '';
+    document.getElementById('complianceStateFilter').value = '';
+    document.getElementById('totalStorageMin').value = '';
+    document.getElementById('totalStorageMax').value = '';
+    document.getElementById('freeStorageMin').value = '';
+    document.getElementById('freeStorageMax').value = '';
+    applyFilters();
+}
 
 // Adiciona eventos
-document.getElementById('searchInput').addEventListener('input', debouncedFilter);
+const debouncedApplyFilters = debounce(applyFilters, 300);
+document.getElementById('applyFilters').addEventListener('click', applyFilters);
+document.getElementById('clearFilters').addEventListener('click', clearFilters);
+document.getElementById('deviceNameFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('userPrincipalNameFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('osVersionFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('serialNumberFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('operatingSystemFilter').addEventListener('change', applyFilters);
+document.getElementById('manufacturerFilter').addEventListener('change', applyFilters);
+document.getElementById('modelFilter').addEventListener('change', applyFilters);
+document.getElementById('complianceStateFilter').addEventListener('change', applyFilters);
+document.getElementById('lastSyncDateStart').addEventListener('change', applyFilters);
+document.getElementById('lastSyncDateEnd').addEventListener('change', applyFilters);
+document.getElementById('totalStorageMin').addEventListener('input', debouncedApplyFilters);
+document.getElementById('totalStorageMax').addEventListener('input', debouncedApplyFilters);
+document.getElementById('freeStorageMin').addEventListener('input', debouncedApplyFilters);
+document.getElementById('freeStorageMax').addEventListener('input', debouncedApplyFilters);
 document.getElementById('sortSelect').addEventListener('change', sortDevices);
 document.getElementById('toggleView').addEventListener('click', () => {
     isGridView = !isGridView;
@@ -153,9 +254,15 @@ document.getElementById('nextPage').addEventListener('click', () => {
         renderPage();
     }
 });
+document.getElementById('toggleFilters').addEventListener('click', () => {
+    const filterPanel = document.getElementById('filterPanel');
+    filterPanel.classList.toggle('hidden');
+    document.getElementById('toggleFilters').textContent = filterPanel.classList.contains('hidden') ? 'Filtros Avançados' : 'Esconder Filtros';
+});
 
 // Inicialização
 window.onload = () => {
+    populateDropdowns();
     renderPage();
     document.getElementById('toggleView').textContent = 'Ver como Grade';
 };
