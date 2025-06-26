@@ -42,25 +42,56 @@ h1 {
     position: relative;
 }
 
-.filter-panel {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    background-color: var(--card-bg);
-    padding: 1rem;
-    border-radius: 0.375rem;
-    margin-bottom: 1rem;
-    box-shadow: var(--shadow);
+.dropdown {
+    position: relative;
 }
 
-.filter-group {
+.dropdown-content {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    background-color: var(--card-bg);
+    border-radius: 0.375rem;
+    box-shadow: var(--shadow);
+    padding: 1rem;
+    width: 300px;
+    max-height: 400px;
+    overflow-y: auto;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.dropdown-content:not(.hidden) {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.filter-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.column-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-group, .column-group label {
     display: flex;
     flex-direction: column;
 }
 
-.filter-group label {
+.filter-group label, .column-group label {
     font-size: 0.875rem;
     margin-bottom: 0.25rem;
+}
+
+.column-group input[type="checkbox"] {
+    margin-right: 0.5rem;
 }
 
 input, select, button {
@@ -149,11 +180,19 @@ th {
     position: sticky;
     top: 0;
     z-index: 1;
+    cursor: pointer;
 }
 
 th:hover {
     background-color: #2563eb;
-    cursor: pointer;
+}
+
+th.sort-asc::after {
+    content: ' ▲';
+}
+
+th.sort-desc::after {
+    content: ' ▼';
 }
 
 tr {
@@ -244,8 +283,9 @@ tr:hover {
         align-items: stretch;
     }
 
-    .filter-panel {
-        grid-template-columns: 1fr;
+    .dropdown-content {
+        width: 100%;
+        max-width: 300px;
     }
 
     input, select {
