@@ -1,132 +1,161 @@
 const modelImages = {
-    // Adicione URLs de imagens para cada modelo conforme o log
-    "Surface Pro 7": "https://via.placeholder.com/150",
-    "Surface Laptop 4": "https://via.placeholder.com/150",
-    "iPhone 12": "https://via.placeholder.com/150",
-    // Adicione mais modelos conforme necessário
-    "default": "https://via.placeholder.com/150?text=No+Image"
+    "Surface Pro 7": "https://via.placeholder.com/150?text=Surface+Pro+7",
+    "Surface Laptop 4": "https://via.placeholder.com/150?text=Surface+Laptop+4",
+    "iPhone 12": "https://via.placeholder.com/150?text=iPhone+12",
+    "default": "https://via.placeholder.com/150?text=Sem+Imagem"
 };
 
 let currentPage = 1;
-const rowsPerPage = 10;
+const rowsPerPage = 100; // Aumentado para melhor desempenho com muitos dispositivos
 let isGridView = false;
-let allRows = [];
-let allCards = [];
+let filteredDevices = [...devices]; // Assume que 'devices' vem do JSON inline
+let sortKey = 'deviceName';
+let sortOrder = 'asc';
 
-function updateImages() {
-    document.querySelectorAll('.device-card, [data-model]').forEach(element => {
-        const model = element.dataset.model;
-        const img = element.querySelector('.device-image');
-        if (img) {
-            img.src = modelImages[model] || modelImages['default'];
-        }
-    });
+// Função para formatar data no padrão brasileiro
+function formatDate(dateStr) {
+    if (dateStr === "N/A") return "N/A";
+    const date = new Date(dateStr);
+    return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-function filterTable() {
-    const input = document.getElementById('searchInput').value.toLowerCase();
-    allRows.forEach(row => {
-        const cells = row.getElementsByTagName('td');
-        let match = false;
-        for (let j = 0; j < cells.length; j++) {
-            if (cells[j].textContent.toLowerCase().includes(input)) {
-                match = true;
-                break;
-            }
-        }
-        row.style.display = match ? '' : 'none';
-    });
-    allCards.forEach(card => {
-        const texts = card.textContent.toLowerCase();
-        card.style.display = texts.includes(input) ? '' : 'none';
-    });
-    currentPage = 1;
-    paginate();
+// Função debounce para otimizar busca
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
-function sortTable(key) {
-    const rows = Array.from(allRows);
-    const cards = Array.from(allCards);
-    const sortKey = key || document.getElementById('sortSelect').value;
-    const sorter = (a, b) => {
-        let aValue, bValue;
+// Exibe ou oculta o indicador de carregamento
+function showLoading(show) {
+    document.getElementById('loading').style.display = show ? 'block' : 'none';
+}
+
+// Renderiza apenas os dispositivos da página atual
+function renderPage() {
+    showLoading(true);
+    setTimeout(() => {
+        const start = (currentPage - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+        const pageDevices = filteredDevices.slice(start, end);
+
         if (isGridView) {
-            aValue = a.querySelector(`[data-sort="${sortKey}"]`)?.textContent || a.textContent;
-            bValue = b.querySelector(`[data-sort="${sortKey}"]`)?.textContent || b.textContent;
+            const gridHtml = pageDevices.map(device => `
+                <div class="device-card" title="Clique para detalhes">
+                    <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}">
+                    <h2>${device.deviceName}</h2>
+                    <p><strong>Usuário:</strong> ${device.userPrincipalName}</p>
+                    <p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>
+                    <p><strong>Fabricante:</strong> ${device.manufacturer}</p>
+                    <p><strong>Modelo:</strong> ${device.model}</p>
+                    <p><strong>Número de Série:</strong> ${device.serialNumber}</p>
+                    <p><strong>Última Sinc.:</strong> ${formatDate(device.lastSyncDateTime)}</p>
+                    <p><strong>Conformidade:</strong> ${device.complianceState}</p>
+                    <p><strong>Armazenamento:</strong> ${device.totalStorageGB} GB (Livre: ${device.freeStorageGB} GB)</p>
+                </div>
+            `).join('');
+            document.getElementById('gridContainer').innerHTML = gridHtml;
+            document.getElementById('devicesTable').classList.add('hidden');
+            document.getElementById('devicesGrid').classList.remove('hidden');
         } else {
-            const index = {
-                'DeviceName': 0, 'UserPrincipalName': 1, 'OperatingSystem': 2, 'OSVersion': 3,
-                'Manufacturer': 4, 'Model': 5, 'SerialNumber': 6, 'LastSyncDateTime': 7,
-                'ComplianceState': 8, 'TotalStorageGB': 9, 'FreeStorageGB': 10
-            }[sortKey];
-            aValue = a.cells[index].textContent;
-            bValue = b.cells[index].textContent;
+            const tableHtml = pageDevices.map(device => `
+                <tr title="Detalhes do dispositivo">
+                    <td>${device.deviceName}</td>
+                    <td>${device.userPrincipalName}</td>
+                    <td>${device.operatingSystem}</td>
+                    <td>${device.osVersion}</td>
+                    <td>${device.manufacturer}</td>
+                    <td>${device.model}</td>
+                    <td>${device.serialNumber}</td>
+                    <td>${formatDate(device.lastSyncDateTime)}</td>
+                    <td>${device.complianceState}</td>
+                    <td>${device.totalStorageGB}</td>
+                    <td>${device.freeStorageGB}</td>
+                </tr>
+            `).join('');
+            document.getElementById('tableBody').innerHTML = tableHtml;
+            document.getElementById('devicesGrid').classList.add('hidden');
+            document.getElementById('devicesTable').classList.remove('hidden');
         }
-        if (sortKey === 'LastSyncDateTime') {
+
+        const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
+        document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages} (${filteredDevices.length} dispositivos)`;
+        document.getElementById('prevPage').disabled = currentPage === 1;
+        document.getElementById('nextPage').disabled = currentPage === totalPages;
+        showLoading(false);
+    }, 100); // Atraso mínimo para feedback visual
+}
+
+// Filtra dispositivos com base na busca
+function filterDevices() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    filteredDevices = devices.filter(device =>
+        Object.values(device).some(value =>
+            value.toString().toLowerCase().includes(searchTerm)
+        )
+    );
+    currentPage = 1;
+    renderPage();
+}
+
+// Ordena dispositivos
+function sortDevices() {
+    const sortSelect = document.getElementById('sortSelect');
+    sortKey = sortSelect.value;
+    sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    filteredDevices.sort((a, b) => {
+        let aValue = a[sortKey];
+        let bValue = b[sortKey];
+        if (sortKey === 'lastSyncDateTime' && aValue !== "N/A" && bValue !== "N/A") {
             aValue = new Date(aValue);
             bValue = new Date(bValue);
-        } else if (sortKey === 'TotalStorageGB' || sortKey === 'FreeStorageGB') {
+        } else if (sortKey === 'totalStorageGB' || sortKey === 'freeStorageGB') {
             aValue = parseFloat(aValue);
             bValue = parseFloat(bValue);
         }
-        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-    };
-    rows.sort(sorter);
-    cards.sort(sorter);
-    const tbody = document.getElementById('tableBody');
-    tbody.innerHTML = '';
-    rows.forEach(row => tbody.appendChild(row));
-    const grid = document.getElementById('devicesGrid');
-    grid.innerHTML = '';
-    cards.forEach(card => grid.appendChild(card));
-    currentPage = 1;
-    paginate();
+        if (aValue === "N/A" || bValue === "N/A") {
+            return aValue === bValue ? 0 : aValue === "N/A" ? 1 : -1;
+        }
+        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+        return 0;
+    });
+    renderPage();
 }
 
-function paginate() {
-    const totalRows = allRows.filter(row => row.style.display !== 'none').length;
-    const totalPages = Math.ceil(totalRows / rowsPerPage);
-    currentPage = Math.min(currentPage, totalPages) || 1;
-    allRows.forEach((row, index) => {
-        row.style.display = (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage && row.style.display !== 'none') ? '' : 'none';
-    });
-    allCards.forEach((card, index) => {
-        card.style.display = (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage && card.style.display !== 'none') ? '' : 'none';
-    });
-    document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
-    document.getElementById('prevPage').disabled = currentPage === 1;
-    document.getElementById('nextPage').disabled = currentPage === totalPages;
-}
+// Adiciona debounce à busca
+const debouncedFilter = debounce(filterDevices, 300);
 
-function toggleView() {
+// Adiciona eventos
+document.getElementById('searchInput').addEventListener('input', debouncedFilter);
+document.getElementById('sortSelect').addEventListener('change', sortDevices);
+document.getElementById('toggleView').addEventListener('click', () => {
     isGridView = !isGridView;
-    document.getElementById('devicesTable').classList.toggle('hidden', isGridView);
-    document.getElementById('devicesGrid').classList.toggle('hidden', !isGridView);
-    document.getElementById('toggleView').textContent = isGridView ? 'Switch to List View' : 'Switch to Grid View';
-    paginate();
-}
-
+    document.getElementById('toggleView').textContent = isGridView ? 'Ver como Lista' : 'Ver como Grade';
+    renderPage();
+});
 document.getElementById('prevPage').addEventListener('click', () => {
     if (currentPage > 1) {
         currentPage--;
-        paginate();
+        renderPage();
+    }
+});
+document.getElementById('nextPage').addEventListener('click', () => {
+    const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderPage();
     }
 });
 
-document.getElementById('nextPage').addEventListener('click', () => {
-    currentPage++;
-    paginate();
-});
-
-document.getElementById('toggleView').addEventListener('click', toggleView);
-
+// Inicialização
 window.onload = () => {
-    allRows = Array.from(document.getElementById('tableBody').getElementsByTagName('tr'));
-    allCards = Array.from(document.getElementsByClassName('device-card'));
-    allCards.forEach(card => {
-        const model = card.dataset.model;
-        const img = card.querySelector('.device-image');
-        img.src = modelImages[model] || modelImages['default'];
-    });
-    paginate();
+    renderPage();
+    document.getElementById('toggleView').textContent = 'Ver como Grade';
 };
