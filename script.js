@@ -1,6 +1,5 @@
-
 const modelImages = {
-    // Adicione URLs de imagens para cada modelo conforme o log em device_models_*.log
+    // Adicione URLs de imagens para cada modelo conforme o log
     "Surface Pro 7": "https://via.placeholder.com/150",
     "Surface Laptop 4": "https://via.placeholder.com/150",
     "iPhone 12": "https://via.placeholder.com/150",
@@ -11,24 +10,58 @@ const modelImages = {
 let currentPage = 1;
 const rowsPerPage = 10;
 let isGridView = false;
-let filteredData = [];
+let allRows = [];
+let allCards = [];
+
+function updateImages() {
+    document.querySelectorAll('.device-card, [data-model]').forEach(element => {
+        const model = element.dataset.model;
+        const img = element.querySelector('.device-image');
+        if (img) {
+            img.src = modelImages[model] || modelImages['default'];
+        }
+    });
+}
 
 function filterTable() {
     const input = document.getElementById('searchInput').value.toLowerCase();
-    filteredData = deviceData.filter(device => 
-        Object.values(device).some(value => 
-            value.toString().toLowerCase().includes(input)
-        )
-    );
+    allRows.forEach(row => {
+        const cells = row.getElementsByTagName('td');
+        let match = false;
+        for (let j = 0; j < cells.length; j++) {
+            if (cells[j].textContent.toLowerCase().includes(input)) {
+                match = true;
+                break;
+            }
+        }
+        row.style.display = match ? '' : 'none';
+    });
+    allCards.forEach(card => {
+        const texts = card.textContent.toLowerCase();
+        card.style.display = texts.includes(input) ? '' : 'none';
+    });
     currentPage = 1;
-    renderPage();
+    paginate();
 }
 
 function sortTable(key) {
+    const rows = Array.from(allRows);
+    const cards = Array.from(allCards);
     const sortKey = key || document.getElementById('sortSelect').value;
-    filteredData.sort((a, b) => {
-        let aValue = a[sortKey];
-        let bValue = b[sortKey];
+    const sorter = (a, b) => {
+        let aValue, bValue;
+        if (isGridView) {
+            aValue = a.querySelector(`[data-sort="${sortKey}"]`)?.textContent || a.textContent;
+            bValue = b.querySelector(`[data-sort="${sortKey}"]`)?.textContent || b.textContent;
+        } else {
+            const index = {
+                'DeviceName': 0, 'UserPrincipalName': 1, 'OperatingSystem': 2, 'OSVersion': 3,
+                'Manufacturer': 4, 'Model': 5, 'SerialNumber': 6, 'LastSyncDateTime': 7,
+                'ComplianceState': 8, 'TotalStorageGB': 9, 'FreeStorageGB': 10
+            }[sortKey];
+            aValue = a.cells[index].textContent;
+            bValue = b.cells[index].textContent;
+        }
         if (sortKey === 'LastSyncDateTime') {
             aValue = new Date(aValue);
             bValue = new Date(bValue);
@@ -37,60 +70,32 @@ function sortTable(key) {
             bValue = parseFloat(bValue);
         }
         return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-    });
+    };
+    rows.sort(sorter);
+    cards.sort(sorter);
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    rows.forEach(row => tbody.appendChild(row));
+    const grid = document.getElementById('devicesGrid');
+    grid.innerHTML = '';
+    cards.forEach(card => grid.appendChild(card));
     currentPage = 1;
-    renderPage();
+    paginate();
 }
 
-function renderPage() {
-    const start = (currentPage - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-    const pageData = filteredData.slice(start, end);
-    const tbody = document.getElementById('tableBody');
-    const grid = document.getElementById('devicesGrid');
-    tbody.innerHTML = '';
-    grid.innerHTML = '';
-
-    pageData.forEach(device => {
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-gray-50';
-        row.innerHTML = `
-            <td class="p-2" data-model="${device.Model}">${device.DeviceName}</td>
-            <td class="p-2">${device.UserPrincipalName}</td>
-            <td class="p-2">${device.OperatingSystem}</td>
-            <td class="p-2">${device.OSVersion}</td>
-            <td class="p-2">${device.Manufacturer}</td>
-            <td class="p-2">${device.Model}</td>
-            <td class="p-2">${device.SerialNumber}</td>
-            <td class="p-2">${device.LastSyncDateTime}</td>
-            <td class="p-2">${device.ComplianceState}</td>
-            <td class="p-2">${device.TotalStorageGB}</td>
-            <td class="p-2">${device.FreeStorageGB}</td>
-        `;
-        tbody.appendChild(row);
-
-        const card = document.createElement('div');
-        card.className = 'bg-white p-4 rounded-lg shadow-md device-card';
-        card.dataset.model = device.Model;
-        card.innerHTML = `
-            <img class="w-full h-32 object-contain mb-2 device-image" src="${modelImages[device.Model] || modelImages['default']}" alt="${device.Model}">
-            <h2 class="text-lg font-semibold">${device.DeviceName}</h2>
-            <p><strong>User:</strong> ${device.UserPrincipalName}</p>
-            <p><strong>OS:</strong> ${device.OperatingSystem} ${device.OSVersion}</p>
-            <p><strong>Manufacturer:</strong> ${device.Manufacturer}</p>
-            <p><strong>Model:</strong> ${device.Model}</p>
-            <p><strong>Serial:</strong> ${device.SerialNumber}</p>
-            <p><strong>Last Sync:</strong> ${device.LastSyncDateTime}</p>
-            <p><strong>Compliance:</strong> ${device.ComplianceState}</p>
-            <p><strong>Storage:</strong> ${device.TotalStorageGB} GB (Free: ${device.FreeStorageGB} GB)</p>
-        `;
-        grid.appendChild(card);
+function paginate() {
+    const totalRows = allRows.filter(row => row.style.display !== 'none').length;
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+    currentPage = Math.min(currentPage, totalPages) || 1;
+    allRows.forEach((row, index) => {
+        row.style.display = (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage && row.style.display !== 'none') ? '' : 'none';
     });
-
-    const totalPages = Math.ceil(filteredData.length / rowsPerPage);
-    document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+    allCards.forEach((card, index) => {
+        card.style.display = (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage && card.style.display !== 'none') ? '' : 'none';
+    });
+    document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
     document.getElementById('prevPage').disabled = currentPage === 1;
-    document.getElementById('nextPage').disabled = currentPage >= totalPages;
+    document.getElementById('nextPage').disabled = currentPage === totalPages;
 }
 
 function toggleView() {
@@ -98,22 +103,30 @@ function toggleView() {
     document.getElementById('devicesTable').classList.toggle('hidden', isGridView);
     document.getElementById('devicesGrid').classList.toggle('hidden', !isGridView);
     document.getElementById('toggleView').textContent = isGridView ? 'Switch to List View' : 'Switch to Grid View';
-    renderPage();
+    paginate();
 }
 
-// Configura eventos
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('searchInput').addEventListener('keyup', filterTable);
-    document.getElementById('sortSelect').addEventListener('change', () => sortTable());
-    document.getElementById('prevPage').addEventListener('click', () => {
-        if (currentPage > 1) {
-            currentPage--;
-            renderPage();
-        }
-    });
-    document.getElementById('nextPage').addEventListener('click', () => {
-        currentPage++;
-        renderPage();
-    });
-    document.getElementById('toggleView').addEventListener('click', toggleView);
+document.getElementById('prevPage').addEventListener('click', () => {
+    if (currentPage > 1) {
+        currentPage--;
+        paginate();
+    }
 });
+
+document.getElementById('nextPage').addEventListener('click', () => {
+    currentPage++;
+    paginate();
+});
+
+document.getElementById('toggleView').addEventListener('click', toggleView);
+
+window.onload = () => {
+    allRows = Array.from(document.getElementById('tableBody').getElementsByTagName('tr'));
+    allCards = Array.from(document.getElementsByClassName('device-card'));
+    allCards.forEach(card => {
+        const model = card.dataset.model;
+        const img = card.querySelector('.device-image');
+        img.src = modelImages[model] || modelImages['default'];
+    });
+    paginate();
+};
