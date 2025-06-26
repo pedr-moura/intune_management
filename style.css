@@ -1,65 +1,173 @@
-@import 'https://cdn.tailwindcss.com';
-
 body {
-    @apply bg-gray-100 font-sans p-6;
+    background-color: #1f2937;
+    color: #e5e7eb;
+    font-family: 'Inter', system-ui, sans-serif;
+    margin: 0;
+    padding: 2rem;
+    line-height: 1.5;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
 }
 
 h1 {
-    @apply text-3xl font-bold text-blue-600 text-center mb-6;
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #3b82f6;
+    margin: 0;
 }
 
-div {
-    @apply flex justify-center mb-4 space-x-4;
+.controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
 }
 
 input, select, button {
-    @apply p-2 border rounded-md;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid #4b5563;
+    background-color: #374151;
+    color: #e5e7eb;
+    transition: all 0.2s ease-in-out;
+}
+
+input:focus, select:focus, button:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+input {
+    flex: 1;
+    max-width: 20rem;
+}
+
+select {
+    min-width: 12rem;
 }
 
 button {
-    @apply bg-blue-600 text-white hover:bg-blue-700;
+    background-color: #3b82f6;
+    border: none;
+    cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+    background-color: #2563eb;
 }
 
 button:disabled {
-    @apply bg-gray-400 cursor-not-allowed;
+    background-color: #6b7280;
+    cursor: not-allowed;
 }
 
 table {
-    @apply w-full bg-white shadow-md rounded-lg overflow-hidden;
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #374151;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-thead {
-    @apply bg-blue-600 text-white;
+th, td {
+    padding: 1rem;
+    text-align: left;
 }
 
 th {
-    @apply p-3 cursor-pointer;
+    background-color: #3b82f6;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
 }
 
 th:hover {
-    @apply bg-blue-700;
+    background-color: #2563eb;
 }
 
 tr {
-    @apply hover:bg-gray-50;
+    transition: background-color 0.2s;
 }
 
-td {
-    @apply p-2;
-}
-
-#devicesGrid {
-    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+tr:hover {
+    background-color: #4b5563;
 }
 
 .device-card {
-    @apply bg-white p-4 rounded-lg shadow-md;
+    background-color: #374151;
+    border-radius: 0.375rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.device-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.2);
 }
 
 .device-image {
-    @apply w-full h-32 object-contain mb-2;
+    width: 100%;
+    height: 8rem;
+    object-fit: contain;
+    margin-bottom: 1rem;
+}
+
+.device-card h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #3b82f6;
+}
+
+.device-card p {
+    margin: 0.25rem 0;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
 }
 
 .hidden {
     display: none;
+}
+
+#devicesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 1rem;
+    }
+
+    h1 {
+        font-size: 1.75rem;
+    }
+
+    .controls {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    input, select {
+        width: 100%;
+        max-width: none;
+    }
+
+    #devicesGrid {
+        grid-template-columns: 1fr;
+    }
 }
