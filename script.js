@@ -294,13 +294,18 @@ function applyColumns() {
 
 // Fecha dropdowns ao clicar fora com animação
 function closeDropdowns(event) {
+    const filterPanel = document.getElementById('filterPanel');
+    const columnPanel = document.getElementById('columnPanel');
+    const toggleFilters = document.getElementById('toggleFilters');
+    const toggleColumns = document.getElementById('toggleColumns');
+
     if (!event.target.closest('.dropdown')) {
-        document.getElementById('filterPanel').classList.add('hidden');
-        document.getElementById('toggleFilters').classList.remove('active');
-        document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
-        document.getElementById('columnPanel').classList.add('hidden');
-        document.getElementById('toggleColumns').classList.remove('active');
-        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
+        filterPanel.classList.add('hidden');
+        toggleFilters.classList.remove('active');
+        toggleFilters.querySelector('.arrow').style.transform = 'rotate(0deg)';
+        columnPanel.classList.add('hidden');
+        toggleColumns.classList.remove('active');
+        toggleColumns.querySelector('.arrow').style.transform = 'rotate(0deg)';
     }
 }
 
@@ -358,23 +363,33 @@ document.getElementById('nextPage').addEventListener('click', () => {
         renderPage();
     }
 });
-document.getElementById('toggleFilters').addEventListener('click', () => {
+document.getElementById('toggleFilters').addEventListener('click', (e) => {
+    e.preventDefault();
     const filterPanel = document.getElementById('filterPanel');
     const isHidden = filterPanel.classList.toggle('hidden');
     document.getElementById('toggleFilters').classList.toggle('active', !isHidden);
     document.getElementById('toggleFilters').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-    document.getElementById('columnPanel').classList.add('hidden');
-    document.getElementById('toggleColumns').classList.remove('active');
-    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
+    if (!isHidden) {
+        document.getElementById('columnPanel').classList.add('hidden');
+        document.getElementById('toggleColumns').classList.remove('active');
+        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
+    }
+    filterPanel.style.opacity = isHidden ? '0' : '1';
+    filterPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)';
 });
-document.getElementById('toggleColumns').addEventListener('click', () => {
+document.getElementById('toggleColumns').addEventListener('click', (e) => {
+    e.preventDefault();
     const columnPanel = document.getElementById('columnPanel');
     const isHidden = columnPanel.classList.toggle('hidden');
     document.getElementById('toggleColumns').classList.toggle('active', !isHidden);
     document.getElementById('toggleColumns').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-    document.getElementById('filterPanel').classList.add('hidden');
-    document.getElementById('toggleFilters').classList.remove('active');
-    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
+    if (!isHidden) {
+        document.getElementById('filterPanel').classList.add('hidden');
+        document.getElementById('toggleFilters').classList.remove('active');
+        document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
+    }
+    columnPanel.style.opacity = isHidden ? '0' : '1';
+    columnPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)';
 });
 document.getElementById('applyColumns').addEventListener('click', applyColumns);
 document.querySelectorAll('th').forEach(th => {
