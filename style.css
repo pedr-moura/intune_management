@@ -220,6 +220,7 @@ body {
 .device-card h2 {
     font-size: 1.1rem;
     margin: 0.5rem 0;
+    word-break: break-word;
 }
 
 .device-card p {
