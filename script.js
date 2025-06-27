@@ -1,428 +1,458 @@
-const modelImages = {
-    "Surface Pro 7": "https://placehold.co/150?text=Surface+Pro+7",
-    "Surface Laptop 4": "https://placehold.co/150?text=Surface+Laptop+4",
-    "iPhone 12": "https://placehold.co/150?text=iPhone+12",
-    "Latitude 3400": "https://placehold.co/150?text=Latitude+3400",
-    "default": "https://placehold.co/150?text=Sem+Imagem"
-};
+(function () {
+    // Verifica se window.devices está definido
+    if (!window.devices) {
+        console.error('Erro: A variável window.devices não está definida.');
+        document.getElementById('loading').innerHTML = 'Erro ao carregar os dados dos dispositivos. Verifique o arquivo gerado.';
+        return;
+    }
 
-let currentPage = 1;
-const rowsPerPage = 100;
-let isGridView = false;
-let filteredDevices = [...devices];
-let sortKey = 'deviceName';
-let sortOrder = 'asc';
-let visibleColumns = [
-    'deviceName', 'userPrincipalName', 'operatingSystem', 'osVersion',
-    'manufacturer', 'model', 'serialNumber', 'lastSyncDateTime',
-    'complianceState', 'totalStorageGB', 'freeStorageGB'
-];
+    // Efeitos de iluminação
+    const particleContainer = document.getElementById('particle-container');
+    document.addEventListener('mousemove', (e) => {
+        // Partículas
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        const size = Math.random() * 8 + 4;
+        particle.style.width = `${size}px`;
+        particle.style.height = `${size}px`;
+        particle.style.left = `${e.clientX}px`;
+        particle.style.top = `${e.clientY}px`;
+        particle.style.opacity = Math.random() * 0.5 + 0.3;
+        particleContainer.appendChild(particle);
+        setTimeout(() => particle.remove(), 1000);
 
-// Função para formatar data
-function formatDate(dateStr) {
-    if (dateStr === "N/A") return "N/A";
-    const date = new Date(dateStr);
-    return isNaN(date) ? "N/A" : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-}
+        // Aura
+        const aura = document.getElementById('cursor-aura');
+        aura.style.left = `${e.clientX}px`;
+        aura.style.top = `${e.clientY}px`;
+    });
 
-// Função debounce
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+    const modelImages = {
+        "Surface Pro 7": "https://placehold.co/150?text=Surface+Pro+7",
+        "Surface Laptop 4": "https://placehold.co/150?text=Surface+Laptop+4",
+        "iPhone 12": "https://placehold.co/150?text=iPhone+12",
+        "Latitude 3400": "https://placehold.co/150?text=Latitude+3400",
+        "default": "https://placehold.co/150?text=Sem+Imagem"
     };
-}
 
-// Exibe/oculta loading com animação
-function showLoading(show) {
-    const loading = document.getElementById('loading');
-    loading.style.display = show ? 'flex' : 'none';
-    if (show) {
-        loading.classList.add('animate-pulse');
-        setTimeout(() => loading.classList.remove('animate-pulse'), 1000);
+    let currentPage = 1;
+    const rowsPerPage = 100;
+    let isGridView = false;
+    let filteredDevices = [...window.devices];
+    let sortKey = 'deviceName';
+    let sortOrder = 'asc';
+    let visibleColumns = [
+        'deviceName', 'userPrincipalName', 'operatingSystem', 'osVersion',
+        'manufacturer', 'model', 'serialNumber', 'lastSyncDateTime',
+        'complianceState', 'totalStorageGB', 'freeStorageGB'
+    ];
+
+    // Função para formatar data
+    function formatDate(dateStr) {
+        if (dateStr === "N/A") return "N/A";
+        const date = new Date(dateStr);
+        return isNaN(date) ? "N/A" : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
     }
-}
 
-// Popula dropdowns com valores únicos
-function populateDropdowns() {
-    const operatingSystems = [...new Set(devices.map(d => d.operatingSystem).filter(v => v !== "N/A"))].sort();
-    const manufacturers = [...new Set(devices.map(d => d.manufacturer).filter(v => v !== "N/A"))].sort();
-    const models = [...new Set(devices.map(d => d.model).filter(v => v !== "N/A"))].sort();
-
-    const osSelect = document.getElementById('operatingSystemFilter');
-    operatingSystems.forEach(os => {
-        const option = document.createElement('option');
-        option.value = os;
-        option.textContent = os;
-        osSelect.appendChild(option);
-    });
-
-    const manufacturerSelect = document.getElementById('manufacturerFilter');
-    manufacturers.forEach(man => {
-        const option = document.createElement('option');
-        option.value = man;
-        option.textContent = man;
-        manufacturerSelect.appendChild(option);
-    });
-
-    const modelSelect = document.getElementById('modelFilter');
-    models.forEach(model => {
-        const option = document.createElement('option');
-        option.value = model;
-        option.textContent = model;
-        modelSelect.appendChild(option);
-    });
-}
-
-// Carrega colunas visíveis do localStorage
-function loadVisibleColumns() {
-    const savedColumns = localStorage.getItem('visibleColumns');
-    if (savedColumns) {
-        visibleColumns = JSON.parse(savedColumns);
+    // Função debounce
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
     }
-    document.querySelectorAll('.column-toggle').forEach(checkbox => {
-        checkbox.checked = visibleColumns.includes(checkbox.dataset.column);
-    });
-    updateTableColumns();
-}
 
-// Salva colunas visíveis no localStorage
-function saveVisibleColumns() {
-    localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
-}
-
-// Atualiza visibilidade das colunas
-function updateTableColumns() {
-    document.querySelectorAll('th, td').forEach(cell => {
-        const column = cell.dataset.column;
-        if (column) {
-            cell.style.display = visibleColumns.includes(column) ? '' : 'none';
+    // Exibe/oculta loading com animação
+    function showLoading(show) {
+        const loading = document.getElementById('loading');
+        loading.style.display = show ? 'flex' : 'none';
+        if (show) {
+            loading.classList.add('animate-pulse');
+            setTimeout(() => loading.classList.remove('animate-pulse'), 1000);
         }
-    });
-}
-
-// Renderiza página atual com animação
-function renderPage() {
-    showLoading(true);
-    setTimeout(() => {
-        const start = (currentPage - 1) * rowsPerPage;
-        const end = start + rowsPerPage;
-        const pageDevices = filteredDevices.slice(start, end);
-
-        if (isGridView) {
-            const gridHtml = pageDevices.map(device => `
-                <div class="device-card animate-fade-in" title="Clique para detalhes">
-                    <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}" onerror="this.src='${modelImages['default']}';">
-                    <h2>${device.deviceName}</h2>
-                    ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName}</p>` : ''}
-                    ${visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>` : ''}
-                    ${visibleColumns.includes('manufacturer') ? `<p><strong>Fabricante:</strong> ${device.manufacturer}</p>` : ''}
-                    ${visibleColumns.includes('model') ? `<p><strong>Modelo:</strong> ${device.model}</p>` : ''}
-                    ${visibleColumns.includes('serialNumber') ? `<p><strong>Número de Série:</strong> ${device.serialNumber}</p>` : ''}
-                    ${visibleColumns.includes('lastSyncDateTime') ? `<p><strong>Última Sinc.:</strong> ${formatDate(device.lastSyncDateTime)}</p>` : ''}
-                    ${visibleColumns.includes('complianceState') ? `<p><strong>Conformidade:</strong> ${device.complianceState}</p>` : ''}
-                    ${visibleColumns.includes('totalStorageGB') || visibleColumns.includes('freeStorageGB') ? `<p><strong>Armazenamento:</strong> ${device.totalStorageGB} GB (Livre: ${device.freeStorageGB} GB)</p>` : ''}
-                </div>
-            `).join('');
-            document.getElementById('gridContainer').innerHTML = gridHtml;
-            document.getElementById('devicesTable').classList.add('hidden');
-            document.getElementById('devicesGrid').classList.remove('hidden');
-        } else {
-            const tableHtml = pageDevices.map(device => `
-                <tr class="animate-fade-in" title="Detalhes do dispositivo">
-                    <td data-column="deviceName">${device.deviceName}</td>
-                    <td data-column="userPrincipalName">${device.userPrincipalName}</td>
-                    <td data-column="operatingSystem">${device.operatingSystem}</td>
-                    <td data-column="osVersion">${device.osVersion}</td>
-                    <td data-column="manufacturer">${device.manufacturer}</td>
-                    <td data-column="model">${device.model}</td>
-                    <td data-column="serialNumber">${device.serialNumber}</td>
-                    <td data-column="lastSyncDateTime">${formatDate(device.lastSyncDateTime)}</td>
-                    <td data-column="complianceState">${device.complianceState}</td>
-                    <td data-column="totalStorageGB">${device.totalStorageGB}</td>
-                    <td data-column="freeStorageGB">${device.freeStorageGB}</td>
-                </tr>
-            `).join('');
-            document.getElementById('tableBody').innerHTML = tableHtml;
-            document.getElementById('devicesGrid').classList.add('hidden');
-            document.getElementById('devicesTable').classList.remove('hidden');
-            updateTableColumns();
-        }
-
-        const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
-        document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages} (${filteredDevices.length} dispositivos)`;
-        document.getElementById('prevPage').disabled = currentPage === 1;
-        document.getElementById('nextPage').disabled = currentPage === totalPages;
-        updateSortIndicators();
-        showLoading(false);
-    }, 100);
-}
-
-// Atualiza indicadores de ordenação com ícones SVG
-function updateSortIndicators() {
-    document.querySelectorAll('th').forEach(th => {
-        const sortIcon = th.querySelector('.sort-icon');
-        th.classList.remove('sort-asc', 'sort-desc');
-        if (th.dataset.column === sortKey) {
-            th.classList.add(`sort-${sortOrder}`);
-            sortIcon.style.transform = sortOrder === 'asc' ? 'rotate(0deg)' : 'rotate(180deg)';
-        } else {
-            sortIcon.style.transform = 'rotate(0deg)';
-        }
-    });
-}
-
-// Valida inputs numéricos
-function validateNumberInput(input) {
-    const value = input.value;
-    if (value && (isNaN(value) || value < 0)) {
-        input.classList.add('invalid');
-    } else {
-        input.classList.remove('invalid');
     }
-}
 
-// Aplica filtros
-function applyFilters() {
-    const deviceNameFilter = document.getElementById('deviceNameFilter').value.toLowerCase();
-    const userPrincipalNameFilter = document.getElementById('userPrincipalNameFilter').value.toLowerCase();
-    const operatingSystemFilter = document.getElementById('operatingSystemFilter').value;
-    const osVersionFilter = document.getElementById('osVersionFilter').value.toLowerCase();
-    const manufacturerFilter = document.getElementById('manufacturerFilter').value;
-    const modelFilter = document.getElementById('modelFilter').value;
-    const serialNumberFilter = document.getElementById('serialNumberFilter').value.toLowerCase();
-    const lastSyncDateStart = document.getElementById('lastSyncDateStart').value;
-    const lastSyncDateEnd = document.getElementById('lastSyncDateEnd').value;
-    const complianceStateFilter = document.getElementById('complianceStateFilter').value;
-    const totalStorageMin = parseFloat(document.getElementById('totalStorageMin').value) || -Infinity;
-    const totalStorageMax = parseFloat(document.getElementById('totalStorageMax').value) || Infinity;
-    const freeStorageMin = parseFloat(document.getElementById('freeStorageMin').value) || -Infinity;
-    const freeStorageMax = parseFloat(document.getElementById('freeStorageMax').value) || Infinity;
+    // Popula dropdowns com valores únicos
+    function populateDropdowns() {
+        const operatingSystems = [...new Set(window.devices.map(d => d.operatingSystem).filter(v => v !== "N/A"))].sort();
+        const manufacturers = [...new Set(window.devices.map(d => d.manufacturer).filter(v => v !== "N/A"))].sort();
+        const models = [...new Set(window.devices.map(d => d.model).filter(v => v !== "N/A"))].sort();
 
-    filteredDevices = devices.filter(device => {
-        const deviceNameMatch = !deviceNameFilter || device.deviceName.toLowerCase().includes(deviceNameFilter);
-        const userPrincipalNameMatch = !userPrincipalNameFilter || device.userPrincipalName.toLowerCase().includes(userPrincipalNameFilter);
-        const operatingSystemMatch = !operatingSystemFilter || device.operatingSystem === operatingSystemFilter;
-        const osVersionMatch = !osVersionFilter || device.osVersion.toLowerCase().includes(osVersionFilter);
-        const manufacturerMatch = !manufacturerFilter || device.manufacturer === manufacturerFilter;
-        const modelMatch = !modelFilter || device.model === modelFilter;
-        const serialNumberMatch = !serialNumberFilter || device.serialNumber.toLowerCase().includes(serialNumberFilter);
-        const complianceStateMatch = !complianceStateFilter || device.complianceState === complianceStateFilter;
-        const totalStorageMatch = device.totalStorageGB >= totalStorageMin && device.totalStorageGB <= totalStorageMax;
-        const freeStorageMatch = device.freeStorageGB >= freeStorageMin && device.freeStorageGB <= freeStorageMax;
-        let lastSyncDateMatch = true;
-        if (lastSyncDateStart || lastSyncDateEnd) {
-            const syncDate = device.lastSyncDateTime !== "N/A" ? new Date(device.lastSyncDateTime) : null;
-            const startDate = lastSyncDateStart ? new Date(lastSyncDateStart) : null;
-            const endDate = lastSyncDateEnd ? new Date(lastSyncDateEnd) : null;
-            lastSyncDateMatch = syncDate &&
-                (!startDate || syncDate >= startDate) &&
-                (!endDate || syncDate <= endDate);
-        }
-        return deviceNameMatch && userPrincipalNameMatch && operatingSystemMatch && osVersionMatch &&
-               manufacturerMatch && modelMatch && serialNumberMatch && lastSyncDateMatch &&
-               complianceStateMatch && totalStorageMatch && freeStorageMatch;
-    });
+        const osSelect = document.getElementById('operatingSystemFilter');
+        operatingSystems.forEach(os => {
+            const option = document.createElement('option');
+            option.value = os;
+            option.textContent = os;
+            osSelect.appendChild(option);
+        });
 
-    currentPage = 1;
-    renderPage();
-}
+        const manufacturerSelect = document.getElementById('manufacturerFilter');
+        manufacturers.forEach(man => {
+            const option = document.createElement('option');
+            option.value = man;
+            option.textContent = man;
+            manufacturerSelect.appendChild(option);
+        });
 
-// Ordena dispositivos
-function sortDevices(key) {
-    if (sortKey === key) {
-        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-    } else {
-        sortKey = key;
-        sortOrder = 'asc';
+        const modelSelect = document.getElementById('modelFilter');
+        models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            modelSelect.appendChild(option);
+        });
     }
-    document.getElementById('sortSelect').value = key;
-    filteredDevices.sort((a, b) => {
-        let aValue = a[sortKey];
-        let bValue = b[sortKey];
-        if (sortKey === 'lastSyncDateTime' && aValue !== "N/A" && bValue !== "N/A") {
-            aValue = new Date(aValue);
-            bValue = new Date(bValue);
-        } else if (sortKey === 'totalStorageGB' || sortKey === 'freeStorageGB') {
-            aValue = parseFloat(aValue);
-            bValue = parseFloat(bValue);
-        } else {
-            aValue = aValue.toString().toLowerCase();
-            bValue = bValue.toString().toLowerCase();
+
+    // Carrega colunas visíveis do localStorage
+    function loadVisibleColumns() {
+        const savedColumns = localStorage.getItem('visibleColumns');
+        if (savedColumns) {
+            visibleColumns = JSON.parse(savedColumns);
         }
-        if (aValue === "N/A" || bValue === "N/A") {
-            return aValue === bValue ? 0 : aValue === "N/A" ? 1 : -1;
-        }
-        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-        return 0;
-    });
-    renderPage();
-}
+        document.querySelectorAll('.column-toggle').forEach(checkbox => {
+            checkbox.checked = visibleColumns.includes(checkbox.dataset.column);
+        });
+        updateTableColumns();
+    }
 
-// Limpa filtros
-function clearFilters() {
-    document.getElementById('deviceNameFilter').value = '';
-    document.getElementById('userPrincipalNameFilter').value = '';
-    document.getElementById('operatingSystemFilter').value = '';
-    document.getElementById('osVersionFilter').value = '';
-    document.getElementById('manufacturerFilter').value = '';
-    document.getElementById('modelFilter').value = '';
-    document.getElementById('serialNumberFilter').value = '';
-    document.getElementById('lastSyncDateStart').value = '';
-    document.getElementById('lastSyncDateEnd').value = '';
-    document.getElementById('complianceStateFilter').value = '';
-    document.getElementById('totalStorageMin').value = '';
-    document.getElementById('totalStorageMax').value = '';
-    document.getElementById('freeStorageMin').value = '';
-    document.getElementById('freeStorageMax').value = '';
-    document.querySelectorAll('input').forEach(input => input.classList.remove('invalid'));
-    applyFilters();
-}
+    // Salva colunas visíveis no localStorage
+    function saveVisibleColumns() {
+        localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
+    }
 
-// Aplica seleção de colunas
-function applyColumns() {
-    visibleColumns = Array.from(document.querySelectorAll('.column-toggle:checked')).map(cb => cb.dataset.column);
-    saveVisibleColumns();
-    renderPage();
-}
-
-// Fecha dropdowns ao clicar fora
-function closeDropdowns(event) {
-    const dropdowns = document.querySelectorAll('.dropdown-content');
-    dropdowns.forEach(panel => {
-        const card = panel.closest('.control-card');
-        if (!card.contains(event.target)) {
-            panel.classList.add('hidden');
-            card.classList.remove('is-active');
-            const button = card.querySelector('.btn');
-            const arrow = button.querySelector('.arrow');
-            if (arrow) {
-                arrow.style.transform = 'rotate(0deg)';
+    // Atualiza visibilidade das colunas
+    function updateTableColumns() {
+        document.querySelectorAll('th, td').forEach(cell => {
+            const column = cell.dataset.column;
+            if (column) {
+                cell.style.display = visibleColumns.includes(column) ? '' : 'none';
             }
-            button.classList.remove('active');
+        });
+    }
+
+    // Renderiza página atual com animação
+    function renderPage() {
+        showLoading(true);
+        setTimeout(() => {
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageDevices = filteredDevices.slice(start, end);
+
+            if (isGridView) {
+                const gridHtml = pageDevices.map(device => `
+                    <div class="device-card animate-fade-in" title="Clique para detalhes">
+                        <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}" onerror="this.src='${modelImages['default']}';">
+                        <h2>${device.deviceName}</h2>
+                        ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName}</p>` : ''}
+                        ${visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>` : ''}
+                        ${visibleColumns.includes('manufacturer') ? `<p><strong>Fabricante:</strong> ${device.manufacturer}</p>` : ''}
+                        ${visibleColumns.includes('model') ? `<p><strong>Modelo:</strong> ${device.model}</p>` : ''}
+                        ${visibleColumns.includes('serialNumber') ? `<p><strong>Número de Série:</strong> ${device.serialNumber}</p>` : ''}
+                        ${visibleColumns.includes('lastSyncDateTime') ? `<p><strong>Última Sinc.:</strong> ${formatDate(device.lastSyncDateTime)}</p>` : ''}
+                        ${visibleColumns.includes('complianceState') ? `<p><strong>Conformidade:</strong> ${device.complianceState}</p>` : ''}
+                        ${visibleColumns.includes('totalStorageGB') || visibleColumns.includes('freeStorageGB') ? `<p><strong>Armazenamento:</strong> ${device.totalStorageGB} GB (Livre: ${device.freeStorageGB} GB)</p>` : ''}
+                    </div>
+                `).join('');
+                document.getElementById('gridContainer').innerHTML = gridHtml;
+                document.getElementById('devicesTable').classList.add('hidden');
+                document.getElementById('devicesGrid').classList.remove('hidden');
+            } else {
+                const tableHtml = pageDevices.map(device => `
+                    <tr class="animate-fade-in" title="Detalhes do dispositivo">
+                        <td data-column="deviceName">${device.deviceName}</td>
+                        <td data-column="userPrincipalName">${device.userPrincipalName}</td>
+                        <td data-column="operatingSystem">${device.operatingSystem}</td>
+                        <td data-column="osVersion">${device.osVersion}</td>
+                        <td data-column="manufacturer">${device.manufacturer}</td>
+                        <td data-column="model">${device.model}</td>
+                        <td data-column="serialNumber">${device.serialNumber}</td>
+                        <td data-column="lastSyncDateTime">${formatDate(device.lastSyncDateTime)}</td>
+                        <td data-column="complianceState">${device.complianceState}</td>
+                        <td data-column="totalStorageGB">${device.totalStorageGB}</td>
+                        <td data-column="freeStorageGB">${device.freeStorageGB}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('tableBody').innerHTML = tableHtml;
+                document.getElementById('devicesGrid').classList.add('hidden');
+                document.getElementById('devicesTable').classList.remove('hidden');
+                updateTableColumns();
+            }
+
+            const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
+            document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages} (${filteredDevices.length} dispositivos)`;
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage === totalPages;
+            updateSortIndicators();
+            showLoading(false);
+        }, 100);
+    }
+
+    // Atualiza indicadores de ordenação com ícones SVG
+    function updateSortIndicators() {
+        document.querySelectorAll('th').forEach(th => {
+            const sortIcon = th.querySelector('.sort-icon');
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.column === sortKey) {
+                th.classList.add(`sort-${sortOrder}`);
+                sortIcon.style.transform = sortOrder === 'asc' ? 'rotate(0deg)' : 'rotate(180deg)';
+            } else {
+                sortIcon.style.transform = 'rotate(0deg)';
+            }
+        });
+    }
+
+    // Valida inputs numéricos
+    function validateNumberInput(input) {
+        const value = input.value;
+        if (value && (isNaN(value) || value < 0)) {
+            input.classList.add('invalid');
+        } else {
+            input.classList.remove('invalid');
+        }
+    }
+
+    // Aplica filtros
+    function applyFilters() {
+        const deviceNameFilter = document.getElementById('deviceNameFilter').value.toLowerCase();
+        const userPrincipalNameFilter = document.getElementById('userPrincipalNameFilter').value.toLowerCase();
+        const operatingSystemFilter = document.getElementById('operatingSystemFilter').value;
+        const osVersionFilter = document.getElementById('osVersionFilter').value.toLowerCase();
+        const manufacturerFilter = document.getElementById('manufacturerFilter').value;
+        const modelFilter = document.getElementById('modelFilter').value;
+        const serialNumberFilter = document.getElementById('serialNumberFilter').value.toLowerCase();
+        const lastSyncDateStart = document.getElementById('lastSyncDateStart').value;
+        const lastSyncDateEnd = document.getElementById('lastSyncDateEnd').value;
+        const complianceStateFilter = document.getElementById('complianceStateFilter').value;
+        const totalStorageMin = parseFloat(document.getElementById('totalStorageMin').value) || -Infinity;
+        const totalStorageMax = parseFloat(document.getElementById('totalStorageMax').value) || Infinity;
+        const freeStorageMin = parseFloat(document.getElementById('freeStorageMin').value) || -Infinity;
+        const freeStorageMax = parseFloat(document.getElementById('freeStorageMax').value) || Infinity;
+
+        filteredDevices = window.devices.filter(device => {
+            const deviceNameMatch = !deviceNameFilter || device.deviceName.toLowerCase().includes(deviceNameFilter);
+            const userPrincipalNameMatch = !userPrincipalNameFilter || device.userPrincipalName.toLowerCase().includes(userPrincipalNameFilter);
+            const operatingSystemMatch = !operatingSystemFilter || device.operatingSystem === operatingSystemFilter;
+            const osVersionMatch = !osVersionFilter || device.osVersion.toLowerCase().includes(osVersionFilter);
+            const manufacturerMatch = !manufacturerFilter || device.manufacturer === manufacturerFilter;
+            const modelMatch = !modelFilter || device.model === modelFilter;
+            const serialNumberMatch = !serialNumberFilter || device.serialNumber.toLowerCase().includes(serialNumberFilter);
+            const complianceStateMatch = !complianceStateFilter || device.complianceState === complianceStateFilter;
+            const totalStorageMatch = device.totalStorageGB >= totalStorageMin && device.totalStorageGB <= totalStorageMax;
+            const freeStorageMatch = device.freeStorageGB >= freeStorageMin && device.freeStorageGB <= freeStorageMax;
+            let lastSyncDateMatch = true;
+            if (lastSyncDateStart || lastSyncDateEnd) {
+                const syncDate = device.lastSyncDateTime !== "N/A" ? new Date(device.lastSyncDateTime) : null;
+                const startDate = lastSyncDateStart ? new Date(lastSyncDateStart) : null;
+                const endDate = lastSyncDateEnd ? new Date(lastSyncDateEnd) : null;
+                lastSyncDateMatch = syncDate &&
+                    (!startDate || syncDate >= startDate) &&
+                    (!endDate || syncDate <= endDate);
+            }
+            return deviceNameMatch && userPrincipalNameMatch && operatingSystemMatch && osVersionMatch &&
+                   manufacturerMatch && modelMatch && serialNumberMatch && lastSyncDateMatch &&
+                   complianceStateMatch && totalStorageMatch && freeStorageMatch;
+        });
+
+        currentPage = 1;
+        renderPage();
+    }
+
+    // Ordena dispositivos
+    function sortDevices(key) {
+        if (sortKey === key) {
+            sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortKey = key;
+            sortOrder = 'asc';
+        }
+        document.getElementById('sortSelect').value = key;
+        filteredDevices.sort((a, b) => {
+            let aValue = a[sortKey];
+            let bValue = b[sortKey];
+            if (sortKey === 'lastSyncDateTime' && aValue !== "N/A" && bValue !== "N/A") {
+                aValue = new Date(aValue);
+                bValue = new Date(bValue);
+            } else if (sortKey === 'totalStorageGB' || sortKey === 'freeStorageGB') {
+                aValue = parseFloat(aValue);
+                bValue = parseFloat(bValue);
+            } else {
+                aValue = aValue.toString().toLowerCase();
+                bValue = bValue.toString().toLowerCase();
+            }
+            if (aValue === "N/A" || bValue === "N/A") {
+                return aValue === bValue ? 0 : aValue === "N/A" ? 1 : -1;
+            }
+            if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+            if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+            return 0;
+        });
+        renderPage();
+    }
+
+    // Limpa filtros
+    function clearFilters() {
+        document.getElementById('deviceNameFilter').value = '';
+        document.getElementById('userPrincipalNameFilter').value = '';
+        document.getElementById('operatingSystemFilter').value = '';
+        document.getElementById('osVersionFilter').value = '';
+        document.getElementById('manufacturerFilter').value = '';
+        document.getElementById('modelFilter').value = '';
+        document.getElementById('serialNumberFilter').value = '';
+        document.getElementById('lastSyncDateStart').value = '';
+        document.getElementById('lastSyncDateEnd').value = '';
+        document.getElementById('complianceStateFilter').value = '';
+        document.getElementById('totalStorageMin').value = '';
+        document.getElementById('totalStorageMax').value = '';
+        document.getElementById('freeStorageMin').value = '';
+        document.getElementById('freeStorageMax').value = '';
+        document.querySelectorAll('input').forEach(input => input.classList.remove('invalid'));
+        applyFilters();
+    }
+
+    // Aplica seleção de colunas
+    function applyColumns() {
+        visibleColumns = Array.from(document.querySelectorAll('.column-toggle:checked')).map(cb => cb.dataset.column);
+        saveVisibleColumns();
+        renderPage();
+    }
+
+    // Fecha dropdowns ao clicar fora
+    function closeDropdowns(event) {
+        const dropdowns = document.querySelectorAll('.dropdown-content');
+        dropdowns.forEach(panel => {
+            const card = panel.closest('.control-card');
+            if (!card.contains(event.target)) {
+                panel.classList.add('hidden');
+                card.classList.remove('is-active');
+                const button = card.querySelector('.btn');
+                const arrow = button.querySelector('.arrow');
+                if (arrow) {
+                    arrow.style.transform = 'rotate(0deg)';
+                }
+                button.classList.remove('active');
+            }
+        });
+    }
+
+    // Adiciona eventos
+    const debouncedApplyFilters = debounce(applyFilters, 300);
+    document.getElementById('applyFilters').addEventListener('click', applyFilters);
+    document.getElementById('clearFilters').addEventListener('click', clearFilters);
+    document.getElementById('deviceNameFilter').addEventListener('input', debouncedApplyFilters);
+    document.getElementById('userPrincipalNameFilter').addEventListener('input', debouncedApplyFilters);
+    document.getElementById('osVersionFilter').addEventListener('input', debouncedApplyFilters);
+    document.getElementById('serialNumberFilter').addEventListener('input', debouncedApplyFilters);
+    document.getElementById('operatingSystemFilter').addEventListener('change', applyFilters);
+    document.getElementById('manufacturerFilter').addEventListener('change', applyFilters);
+    document.getElementById('modelFilter').addEventListener('change', applyFilters);
+    document.getElementById('complianceStateFilter').addEventListener('change', applyFilters);
+    document.getElementById('lastSyncDateStart').addEventListener('change', applyFilters);
+    document.getElementById('lastSyncDateEnd').addEventListener('change', applyFilters);
+    document.getElementById('totalStorageMin').addEventListener('input', (e) => {
+        validateNumberInput(e.target);
+        debouncedApplyFilters();
+    });
+    document.getElementById('totalStorageMax').addEventListener('input', (e) => {
+        validateNumberInput(e.target);
+        debouncedApplyFilters();
+    });
+    document.getElementById('freeStorageMin').addEventListener('input', (e) => {
+        validateNumberInput(e.target);
+        debouncedApplyFilters();
+    });
+    document.getElementById('freeStorageMax').addEventListener('input', (e) => {
+        validateNumberInput(e.target);
+        debouncedApplyFilters();
+    });
+    document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
+    document.getElementById('toggleView').addEventListener('click', () => {
+        isGridView = !isGridView;
+        document.getElementById('toggleView').innerHTML = `
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="${isGridView ? 'M3 6h18M6 12h12M9 18h6' : 'M12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6'}"></path>
+            </svg>
+            Ver como ${isGridView ? 'Lista' : 'Grade'}
+        `;
+        renderPage();
+    });
+    document.getElementById('prevPage').addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            renderPage();
         }
     });
-}
-
-// Adiciona eventos
-const debouncedApplyFilters = debounce(applyFilters, 300);
-document.getElementById('applyFilters').addEventListener('click', applyFilters);
-document.getElementById('clearFilters').addEventListener('click', clearFilters);
-document.getElementById('deviceNameFilter').addEventListener('input', debouncedApplyFilters);
-document.getElementById('userPrincipalNameFilter').addEventListener('input', debouncedApplyFilters);
-document.getElementById('osVersionFilter').addEventListener('input', debouncedApplyFilters);
-document.getElementById('serialNumberFilter').addEventListener('input', debouncedApplyFilters);
-document.getElementById('operatingSystemFilter').addEventListener('change', applyFilters);
-document.getElementById('manufacturerFilter').addEventListener('change', applyFilters);
-document.getElementById('modelFilter').addEventListener('change', applyFilters);
-document.getElementById('complianceStateFilter').addEventListener('change', applyFilters);
-document.getElementById('lastSyncDateStart').addEventListener('change', applyFilters);
-document.getElementById('lastSyncDateEnd').addEventListener('change', applyFilters);
-document.getElementById('totalStorageMin').addEventListener('input', (e) => {
-    validateNumberInput(e.target);
-    debouncedApplyFilters();
-});
-document.getElementById('totalStorageMax').addEventListener('input', (e) => {
-    validateNumberInput(e.target);
-    debouncedApplyFilters();
-});
-document.getElementById('freeStorageMin').addEventListener('input', (e) => {
-    validateNumberInput(e.target);
-    debouncedApplyFilters();
-});
-document.getElementById('freeStorageMax').addEventListener('input', (e) => {
-    validateNumberInput(e.target);
-    debouncedApplyFilters();
-});
-document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
-document.getElementById('toggleView').addEventListener('click', () => {
-    isGridView = !isGridView;
-    document.getElementById('toggleView').innerHTML = `
-        <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="${isGridView ? 'M3 6h18M6 12h12M9 18h6' : '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6'}" />
-        </svg>
-        Ver como ${isGridView ? 'Lista' : 'Grade'}
-    `;
-    renderPage();
-});
-document.getElementById('prevPage').addEventListener('click', () => {
-    if (currentPage > 1) {
-        currentPage--;
-        renderPage();
-    }
-});
-document.getElementById('nextPage').addEventListener('click', () => {
-    const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
-    if (currentPage < totalPages) {
-        currentPage++;
-        renderPage();
-    }
-});
-
-// Gerencia dropdowns de filtros
-document.getElementById('toggleFilters').addEventListener('click', (e) => {
-    e.preventDefault();
-    const panel = document.getElementById('filterPanel');
-    const button = e.currentTarget;
-    const card = button.closest('.control-card');
-    const otherPanel = document.getElementById('columnPanel');
-
-    // Fecha o outro dropdown
-    otherPanel.classList.add('hidden');
-    document.getElementById('toggleColumns').classList.remove('active');
-    document.getElementById('toggleColumns').closest('.control-card').classList.remove('is-active');
-    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
-
-    // Alterna o dropdown atual
-    panel.classList.toggle('hidden');
-    const isHidden = panel.classList.contains('hidden');
-    button.classList.toggle('active', !isHidden);
-    card.classList.toggle('is-active', !isHidden);
-    button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-});
-
-// Gerencia dropdowns de colunas
-document.getElementById('toggleColumns').addEventListener('click', (e) => {
-    e.preventDefault();
-    const panel = document.getElementById('columnPanel');
-    const button = e.currentTarget;
-    const card = button.closest('.control-card');
-    const otherPanel = document.getElementById('filterPanel');
-
-    // Fecha o outro dropdown
-    otherPanel.classList.add('hidden');
-    document.getElementById('toggleFilters').classList.remove('active');
-    document.getElementById('toggleFilters').closest('.control-card').classList.remove('is-active');
-    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
-
-    // Alterna o dropdown atual
-    panel.classList.toggle('hidden');
-    const isHidden = panel.classList.contains('hidden');
-    button.classList.toggle('active', !isHidden);
-    card.classList.toggle('is-active', !isHidden);
-    button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-});
-
-document.getElementById('applyColumns').addEventListener('click', applyColumns);
-document.querySelectorAll('th').forEach(th => {
-    th.addEventListener('click', () => {
-        const column = th.dataset.column;
-        if (column) sortDevices(column);
+    document.getElementById('nextPage').addEventListener('click', () => {
+        const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderPage();
+        }
     });
-});
 
-document.addEventListener('click', closeDropdowns);
+    // Gerencia dropdowns de filtros
+    document.getElementById('toggleFilters').addEventListener('click', (e) => {
+        e.preventDefault();
+        const panel = document.getElementById('filterPanel');
+        const button = e.currentTarget;
+        const card = button.closest('.control-card');
+        const otherPanel = document.getElementById('columnPanel');
 
-// Inicialização
-window.onload = () => {
-    populateDropdowns();
-    loadVisibleColumns();
-    renderPage();
-    document.querySelectorAll('.animate-fade').forEach(el => el.classList.add('visible'));
-};
+        // Fecha o outro dropdown
+        otherPanel.classList.add('hidden');
+        document.getElementById('toggleColumns').classList.remove('active');
+        document.getElementById('toggleColumns').closest('.control-card').classList.remove('is-active');
+        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
+
+        // Alterna o dropdown atual
+        panel.classList.toggle('hidden');
+        const isHidden = panel.classList.contains('hidden');
+        button.classList.toggle('active', !isHidden);
+        card.classList.toggle('is-active', !isHidden);
+        button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+    });
+
+    // Gerencia dropdowns de colunas
+    document.getElementById('toggleColumns').addEventListener('click', (e) => {
+        e.preventDefault();
+        const panel = document.getElementById('columnPanel');
+        const button = e.currentTarget;
+        const card = button.closest('.control-card');
+        const otherPanel = document.getElementById('filterPanel');
+
+        // Fecha o outro dropdown
+        otherPanel.classList.add('hidden');
+        document.getElementById('toggleFilters').classList.remove('active');
+        document.getElementById('toggleFilters').closest('.control-card').classList.remove('is-active');
+        document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
+
+        // Alterna o dropdown atual
+        panel.classList.toggle('hidden');
+        const isHidden = panel.classList.contains('hidden');
+        button.classList.toggle('active', !isHidden);
+        card.classList.toggle('is-active', !isHidden);
+        button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+    });
+
+    document.getElementById('applyColumns').addEventListener('click', applyColumns);
+    document.querySelectorAll('th').forEach(th => {
+        th.addEventListener('click', () => {
+            const column = th.dataset.column;
+            if (column) sortDevices(column);
+        });
+    });
+
+    document.addEventListener('click', closeDropdowns);
+
+    // Inicialização
+    window.onload = () => {
+        populateDropdowns();
+        loadVisibleColumns();
+        renderPage();
+        document.querySelectorAll('.animate-fade').forEach(el => el.classList.add('visible'));
+    };
+})();
