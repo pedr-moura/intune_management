@@ -374,6 +374,7 @@ th:hover {
 }
 
 .sort-icon {
+    opacity: 0;
     vertical-align: middle;
     margin-left: 0.5rem;
     transition: transform var(--transition-duration);
