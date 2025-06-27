@@ -309,6 +309,12 @@ function closeDropdowns(event) {
     }
 }
 
+// Função para logar o z-index de um elemento
+function logZIndex(element, action) {
+    const zIndex = window.getComputedStyle(element).getPropertyValue('z-index');
+    console.log(`Z-index de ${element.id || element.className} durante ${action}: ${zIndex}`);
+}
+
 // Adiciona eventos
 const debouncedApplyFilters = debounce(applyFilters, 300);
 document.getElementById('applyFilters').addEventListener('click', () => { console.log('Botão "Aplicar Filtros" clicado'); applyFilters(); });
@@ -348,8 +354,42 @@ document.getElementById('toggleView').addEventListener('click', (e) => { e.stopP
 `; renderPage(); });
 document.getElementById('prevPage').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Página Anterior" clicado'); if (currentPage > 1) { currentPage--; renderPage(); } });
 document.getElementById('nextPage').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Próxima Página" clicado'); const totalPages = Math.ceil(filteredDevices.length / rowsPerPage); if (currentPage < totalPages) { currentPage++; renderPage(); } });
-document.getElementById('toggleFilters').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Filtros Avançados" clicado'); e.preventDefault(); const filterPanel = document.getElementById('filterPanel'); const isHidden = filterPanel.classList.toggle('hidden'); document.getElementById('toggleFilters').classList.toggle('active', !isHidden); document.getElementById('toggleFilters').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; if (!isHidden) { document.getElementById('columnPanel').classList.add('hidden'); document.getElementById('toggleColumns').classList.remove('active'); document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)'; } filterPanel.style.opacity = isHidden ? '0' : '1'; filterPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; });
-document.getElementById('toggleColumns').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Selecionar Colunas" clicado'); e.preventDefault(); const columnPanel = document.getElementById('columnPanel'); const isHidden = columnPanel.classList.toggle('hidden'); document.getElementById('toggleColumns').classList.toggle('active', !isHidden); document.getElementById('toggleColumns').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; if (!isHidden) { document.getElementById('filterPanel').classList.add('hidden'); document.getElementById('toggleFilters').classList.remove('active'); document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)'; } columnPanel.style.opacity = isHidden ? '0' : '1'; columnPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; });
+document.getElementById('toggleFilters').addEventListener('click', (e) => { 
+    e.stopPropagation(); 
+    console.log('Botão "Filtros Avançados" clicado'); 
+    e.preventDefault(); 
+    const filterPanel = document.getElementById('filterPanel'); 
+    const isHidden = filterPanel.classList.toggle('hidden'); 
+    document.getElementById('toggleFilters').classList.toggle('active', !isHidden); 
+    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; 
+    if (!isHidden) { 
+        document.getElementById('columnPanel').classList.add('hidden'); 
+        document.getElementById('toggleColumns').classList.remove('active'); 
+        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)'; 
+    } 
+    filterPanel.style.opacity = isHidden ? '0' : '1'; 
+    filterPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; 
+    logZIndex(filterPanel, isHidden ? 'ocultando' : 'exibindo'); 
+    logZIndex(document.querySelector('.controls'), 'contexto');
+});
+document.getElementById('toggleColumns').addEventListener('click', (e) => { 
+    e.stopPropagation(); 
+    console.log('Botão "Selecionar Colunas" clicado'); 
+    e.preventDefault(); 
+    const columnPanel = document.getElementById('columnPanel'); 
+    const isHidden = columnPanel.classList.toggle('hidden'); 
+    document.getElementById('toggleColumns').classList.toggle('active', !isHidden); 
+    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; 
+    if (!isHidden) { 
+        document.getElementById('filterPanel').classList.add('hidden'); 
+        document.getElementById('toggleFilters').classList.remove('active'); 
+        document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)'; 
+    } 
+    columnPanel.style.opacity = isHidden ? '0' : '1'; 
+    columnPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; 
+    logZIndex(columnPanel, isHidden ? 'ocultando' : 'exibindo'); 
+    logZIndex(document.querySelector('.controls'), 'contexto');
+});
 document.getElementById('applyColumns').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Aplicar Seleção de Colunas" clicado'); applyColumns(); });
 document.querySelectorAll('th').forEach(th => {
     th.addEventListener('click', (e) => {
@@ -358,6 +398,17 @@ document.querySelectorAll('th').forEach(th => {
         if (column) sortDevices(column);
     });
 });
+
+// Adiciona logs de z-index ao passar o mouse
+document.querySelectorAll('.dropdown-content, .btn').forEach(element => {
+    element.addEventListener('mouseover', (e) => {
+        logZIndex(e.target, 'mouseover');
+    });
+    element.addEventListener('mouseout', (e) => {
+        logZIndex(e.target, 'mouseout');
+    });
+});
+
 document.addEventListener('click', closeDropdowns);
 
 // Inicialização
