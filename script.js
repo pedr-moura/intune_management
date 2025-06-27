@@ -1,9 +1,9 @@
 const modelImages = {
-    "Surface Pro 7": "https://via.placeholder.com/150?text=Surface+Pro+7",
-    "Surface Laptop 4": "https://via.placeholder.com/150?text=Surface+Laptop+4",
-    "iPhone 12": "https://via.placeholder.com/150?text=iPhone+12",
-    "Latitude 3400": "https://via.placeholder.com/150?text=Latitude+3400",
-    "default": "https://via.placeholder.com/150?text=Sem+Imagem"
+    "Surface Pro 7": "https://placehold.co/150?text=Surface+Pro+7",
+    "Surface Laptop 4": "https://placehold.co/150?text=Surface+Laptop+4",
+    "iPhone 12": "https://placehold.co/150?text=iPhone+12",
+    "Latitude 3400": "https://placehold.co/150?text=Latitude+3400",
+    "default": "https://placehold.co/150?text=Sem+Imagem"
 };
 
 let currentPage = 1;
@@ -117,7 +117,7 @@ function renderPage() {
         if (isGridView) {
             const gridHtml = pageDevices.map(device => `
                 <div class="device-card animate-fade-in" title="Clique para detalhes">
-                    <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}">
+                    <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}" onerror="this.src='${modelImages['default']}';">
                     <h2>${device.deviceName}</h2>
                     ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName}</p>` : ''}
                     ${visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>` : ''}
@@ -340,19 +340,20 @@ document.getElementById('freeStorageMax').addEventListener('input', (e) => {
     debouncedApplyFilters();
 });
 document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
-document.getElementById('toggleView').addEventListener('click', () => { console.log('Botão "Alternar Visualização" clicado'); isGridView = !isGridView; document.getElementById('toggleView').innerHTML = `
+document.getElementById('toggleView').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Alternar Visualização" clicado'); isGridView = !isGridView; document.getElementById('toggleView').innerHTML = `
     <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M${isGridView ? '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6' : '12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}" />
     </svg>
     Ver como ${isGridView ? 'Lista' : 'Grade'}
 `; renderPage(); });
-document.getElementById('prevPage').addEventListener('click', () => { console.log('Botão "Página Anterior" clicado'); if (currentPage > 1) { currentPage--; renderPage(); } });
-document.getElementById('nextPage').addEventListener('click', () => { console.log('Botão "Próxima Página" clicado'); const totalPages = Math.ceil(filteredDevices.length / rowsPerPage); if (currentPage < totalPages) { currentPage++; renderPage(); } });
-document.getElementById('toggleFilters').addEventListener('click', (e) => { console.log('Botão "Filtros Avançados" clicado'); e.preventDefault(); const filterPanel = document.getElementById('filterPanel'); const isHidden = filterPanel.classList.toggle('hidden'); document.getElementById('toggleFilters').classList.toggle('active', !isHidden); document.getElementById('toggleFilters').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; if (!isHidden) { document.getElementById('columnPanel').classList.add('hidden'); document.getElementById('toggleColumns').classList.remove('active'); document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)'; } filterPanel.style.opacity = isHidden ? '0' : '1'; filterPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; });
-document.getElementById('toggleColumns').addEventListener('click', (e) => { console.log('Botão "Selecionar Colunas" clicado'); e.preventDefault(); const columnPanel = document.getElementById('columnPanel'); const isHidden = columnPanel.classList.toggle('hidden'); document.getElementById('toggleColumns').classList.toggle('active', !isHidden); document.getElementById('toggleColumns').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; if (!isHidden) { document.getElementById('filterPanel').classList.add('hidden'); document.getElementById('toggleFilters').classList.remove('active'); document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)'; } columnPanel.style.opacity = isHidden ? '0' : '1'; columnPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; });
-document.getElementById('applyColumns').addEventListener('click', () => { console.log('Botão "Aplicar Seleção de Colunas" clicado'); applyColumns(); });
+document.getElementById('prevPage').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Página Anterior" clicado'); if (currentPage > 1) { currentPage--; renderPage(); } });
+document.getElementById('nextPage').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Próxima Página" clicado'); const totalPages = Math.ceil(filteredDevices.length / rowsPerPage); if (currentPage < totalPages) { currentPage++; renderPage(); } });
+document.getElementById('toggleFilters').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Filtros Avançados" clicado'); e.preventDefault(); const filterPanel = document.getElementById('filterPanel'); const isHidden = filterPanel.classList.toggle('hidden'); document.getElementById('toggleFilters').classList.toggle('active', !isHidden); document.getElementById('toggleFilters').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; if (!isHidden) { document.getElementById('columnPanel').classList.add('hidden'); document.getElementById('toggleColumns').classList.remove('active'); document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)'; } filterPanel.style.opacity = isHidden ? '0' : '1'; filterPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; });
+document.getElementById('toggleColumns').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Selecionar Colunas" clicado'); e.preventDefault(); const columnPanel = document.getElementById('columnPanel'); const isHidden = columnPanel.classList.toggle('hidden'); document.getElementById('toggleColumns').classList.toggle('active', !isHidden); document.getElementById('toggleColumns').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; if (!isHidden) { document.getElementById('filterPanel').classList.add('hidden'); document.getElementById('toggleFilters').classList.remove('active'); document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)'; } columnPanel.style.opacity = isHidden ? '0' : '1'; columnPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; });
+document.getElementById('applyColumns').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Aplicar Seleção de Colunas" clicado'); applyColumns(); });
 document.querySelectorAll('th').forEach(th => {
-    th.addEventListener('click', () => {
+    th.addEventListener('click', (e) => {
+        e.stopPropagation();
         const column = th.dataset.column;
         if (column) sortDevices(column);
     });
