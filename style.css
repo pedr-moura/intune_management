@@ -228,7 +228,7 @@ body {
 }
 
 .device-image {
-    max-width: 100%;
+    max-width: 170px;
     height: auto;
     border-radius: var(--border-radius);
     margin-bottom: 0.5rem;
