@@ -354,7 +354,7 @@ table {
 }
 
 th {
-    background: linear-gradient(90deg, #3b82f6, #9333ea);
+    background: #3b82f6;
     color: white;
     padding: 1rem;
     text-align: left;
@@ -366,7 +366,7 @@ th {
 }
 
 th:hover {
-    background: linear-gradient(90deg, #2563eb, #7e22ce);
+    background: #2563eb;
     transform: scale(1.02);
 }
 
