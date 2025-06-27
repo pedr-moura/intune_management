@@ -345,7 +345,7 @@ document.getElementById('toggleView').addEventListener('click', () => {
     isGridView = !isGridView;
     document.getElementById('toggleView').innerHTML = `
         <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="${isGridView ? '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6' : '12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}" />
+            <path d="${isGridView ? 'M3 6h18M6 12h12M9 18h6' : '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6'}" />
         </svg>
         Ver como ${isGridView ? 'Lista' : 'Grade'}
     `;
