@@ -1,82 +1,134 @@
-# Define o tenant ID e a URL da API do Microsoft Graph
-$tenantId = "SEU_TENANT_ID"
-$graphApiUrl = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices"
+# Usa CSS e JS hospedados em https://intune-management.vercel.app/
 
-# Função para obter o token de acesso
-function Get-AccessToken {
-    $clientId = "SEU_CLIENT_ID"
-    $clientSecret = "SEU_CLIENT_SECRET"
-    $tokenUrl = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
-    $body = @{
-        grant_type    = "client_credentials"
-        client_id     = $clientId
-        client_secret = $clientSecret
-        scope         = "https://graph.microsoft.com/.default"
-    }
-    $response = Invoke-RestMethod -Method Post -Uri $tokenUrl -Body $body
-    return $response.access_token
+param (
+    [Parameter(Mandatory=$false)]
+    [ValidateScript({$_ -gt 0 -and $_ -eq [int]$_})]
+    [int]$ActiveDeviceSyncDays = 90, # Período para considerar dispositivo ativo (padrão: 90 dias)
+    [string]$OutputDir = "C:\IntManager\report" # Diretório de saída
+)
+
+# Função para mensagens simples
+function Write-Status {
+    param($Message, [string]$Color = "White")
+    Write-Host "[$((Get-Date).ToString('HH:mm:ss'))] $Message" -ForegroundColor $Color
 }
 
-# Função para obter os dispositivos do Intune
-function Get-ManagedDevices {
-    $token = Get-AccessToken
-    $headers = @{
-        Authorization = "Bearer $token"
+# Exibe banner simples
+Write-Host "`n=== Intune Report Manager ===`n" -ForegroundColor Cyan
+
+# Valida o parâmetro ActiveDeviceSyncDays
+if ($ActiveDeviceSyncDays -le 0) {
+    Write-Status "Erro: O parâmetro ActiveDeviceSyncDays deve ser um número inteiro positivo." -Color Red
+    exit
+}
+
+# Verifica e instala módulo Microsoft.Graph se necessário
+Write-Status "Verificando módulo Microsoft.Graph..."
+if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.DeviceManagement)) {
+    Write-Status "Instalando módulo Microsoft.Graph..." -Color Yellow
+    try {
+        Install-Module Microsoft.Graph -Scope CurrentUser -Force -ErrorAction Stop
     }
-    $devices = @()
-    $url = $graphApiUrl
+    catch {
+        Write-Status "Erro ao instalar módulo: $($_.Exception.Message)" -Color Red
+        exit
+    }
+}
+Import-Module Microsoft.Graph.DeviceManagement -ErrorAction Stop
+
+# Conexão com Microsoft Graph
+Write-Status "Conectando ao Microsoft Graph..."
+try {
+    Connect-MgGraph -Scopes "DeviceManagementManagedDevices.Read.All" -NoWelcome -ErrorAction Stop | Out-Null
+    Write-Status "Conexão estabelecida!" -Color Green
+}
+catch {
+    Write-Status "Falha na conexão: $($_.Exception.Message)" -Color Red
+    exit
+}
+
+# Cria diretório de saída
+Write-Status "Criando diretório de saída: $OutputDir"
+try {
+    New-Item -Path $OutputDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
+}
+catch {
+    Write-Status "Erro ao criar diretório: $($_.Exception.Message)" -Color Red
+    Write-Status "Tentando salvar em '$env:TEMP\intune_report'..." -Color Yellow
+    $OutputDir = "$env:TEMP\intune_report"
+    New-Item -Path $OutputDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
+}
+
+# Define caminhos dos arquivos
+$HtmlPath = Join-Path $OutputDir "index.html"
+$LogPath = Join-Path $OutputDir "device_models.log"
+
+# Coleta dispositivos ativos
+Write-Status "Coletando dispositivos ativos (últimos $ActiveDeviceSyncDays dias)..."
+$syncThreshold = (Get-Date).AddDays(-$ActiveDeviceSyncDays).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+$devices = @()
+$uniqueModels = New-Object System.Collections.Generic.HashSet[string]
+try {
+    $selectProps = "id,deviceName,userPrincipalName,operatingSystem,osVersion,manufacturer,model,serialNumber,lastSyncDateTime,complianceState,totalStorageSpaceInBytes,freeStorageSpaceInBytes"
+    $uri = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=lastSyncDateTime ge $syncThreshold&`$select=$selectProps"
     do {
-        $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers
-        $devices += $response.value
-        $url = $response.'@odata.nextLink'
-    } while ($url)
-    return $devices
+        $response = Invoke-MgGraphRequest -Uri $uri -Method Get -ErrorAction Stop
+        $batchDevices = $response.value
+        foreach ($device in $batchDevices) {
+            $totalStorageGB = [math]::Round($device.totalStorageSpaceInBytes / 1GB, 2)
+            $freeStorageGB = [math]::Round($device.freeStorageSpaceInBytes / 1GB, 2)
+            $deviceData = [PSCustomObject]@{
+                deviceName        = if ($device.deviceName) { $device.deviceName } else { "N/A" }
+                userPrincipalName = if ($device.userPrincipalName) { $device.userPrincipalName } else { "N/A" }
+                operatingSystem   = if ($device.operatingSystem) { $device.operatingSystem } else { "N/A" }
+                osVersion         = if ($device.osVersion) { $device.osVersion } else { "N/A" }
+                manufacturer      = if ($device.manufacturer) { $device.manufacturer } else { "N/A" }
+                model             = if ($device.model) { $device.model } else { "N/A" }
+                serialNumber      = if ($device.serialNumber) { $device.serialNumber } else { "N/A" }
+                lastSyncDateTime  = if ($device.lastSyncDateTime) { $device.lastSyncDateTime } else { "N/A" }
+                complianceState   = if ($device.complianceState) { $device.complianceState } else { "N/A" }
+                totalStorageGB    = $totalStorageGB
+                freeStorageGB     = $freeStorageGB
+            }
+            $devices += $deviceData
+            $null = $uniqueModels.Add($device.model)
+        }
+        $uri = $response.'@odata.nextLink'
+    } while ($uri)
+    Write-Status "Encontrados $($devices.Count) dispositivos." -Color Green
+}
+catch {
+    Write-Status "Erro ao coletar dispositivos: $($_.Exception.Message)" -Color Red
+    exit
 }
 
-# Obtém os dispositivos
-$devices = Get-ManagedDevices
+# Gera log de modelos únicos
+Write-Status "Gerando log de modelos em $LogPath..."
+try {
+    $uniqueModels | Sort-Object | Out-File -FilePath $LogPath -Encoding UTF8 -ErrorAction Stop
+    Write-Status "Log de modelos salvo com sucesso! ($($uniqueModels.Count) modelos únicos)" -Color Green
+}
+catch {
+    Write-Status "Erro ao salvar log de modelos: $($_.Exception.Message)" -Color Red
+    Write-Status "Tentando salvar em '$env:TEMP\device_models.log'..." -Color Yellow
+    $LogPath = "$env:TEMP\device_models.log"
+    $uniqueModels | Sort-Object | Out-File -FilePath $LogPath -Encoding UTF8 -ErrorAction Stop
+}
 
-# Converte os dispositivos para JSON
-$devicesJson = $devices | ConvertTo-Json -Depth 3 -Compress
-
-# Gera o conteúdo HTML
-$htmlContent = @"
+# Gera HTML com dados em JSON
+Write-Status "Gerando relatório HTML em $HtmlPath..."
+try {
+    $devicesJson = $devices | ConvertTo-Json -Depth 3 -Compress
+    $htmlContent = @"
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Intune Report Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://intune-management.vercel.app/style.css">
     <style>
-        :root {
-            --primary-color: #1e40af;
-            --bg-color: #0f172a;
-            --frosted-bg: rgba(255, 255, 255, 0.1);
-            --glow-color: rgba(30, 64, 175, 0.2);
-            --aura-color: rgba(30, 64, 175, 0.15);
-            --shadow-neon: 0 0 6px rgba(30, 64, 175, 0.3);
-            --text-color: #ffffff;
-            --text-muted: rgba(255, 255, 255, 0.7);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(180deg, var(--bg-color), #1e293b);
-            color: var(--text-color);
-            min-height: 100vh;
-            padding: 2rem;
-            position: relative;
-            overflow-x: hidden;
-        }
-
         /* Efeitos de iluminação */
         #particle-container {
             position: fixed;
@@ -93,7 +145,8 @@ $htmlContent = @"
             width: 150px;
             height: 150px;
             border-radius: 50%;
-            background: radial-gradient(circle, var(--aura-color), transparent 70%);
+            background: radial-gradient(circle, var(--accent-color) 10%, transparent 70%);
+            opacity: 0.15;
             pointer-events: none;
             z-index: -1;
             transform: translate(-50%, -50%);
@@ -104,7 +157,7 @@ $htmlContent = @"
         .particle {
             position: absolute;
             border-radius: 50%;
-            background: var(--glow-color);
+            background: var(--accent-color);
             mix-blend-mode: screen;
             animation: fadeOut 1s ease-out forwards;
         }
@@ -114,248 +167,13 @@ $htmlContent = @"
             100% { opacity: 0; transform: scale(0.5); }
         }
 
-        /* Header */
-        .header {
-            text-align: center;
-            padding: 2rem 0;
-            margin-bottom: 1.5rem;
-            animation: fadeIn 0.8s ease-in-out;
+        /* Ajuste do fundo para mais escuro */
+        body {
+            background: linear-gradient(180deg, #0d121f, #1e293b);
         }
 
-        .header-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--primary-color);
-        }
-
-        .subtitle {
-            font-size: 1rem;
-            color: var(--text-muted);
-            margin-top: 0.5rem;
-        }
-
-        /* Barra de opções com vidro fosco */
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 0.8rem;
-            background: var(--frosted-bg);
-            backdrop-filter: blur(5px);
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: var(--shadow-neon);
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-        }
-
-        .control-card {
-            position: relative;
-        }
-
-        .btn {
-            background: var(--primary-color);
-            color: var(--text-color);
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-neon);
-        }
-
-        .icon {
-            stroke: var(--text-color);
-            stroke-width: 2;
-            width: 16px;
-            height: 16px;
-        }
-
-        .arrow {
-            width: 14px;
-            height: 14px;
-        }
-
-        /* Dropdown Content */
-        .dropdown-content {
-            position: absolute;
-            top: calc(100% + 6px);
-            left: 0;
-            background: var(--frosted-bg);
-            backdrop-filter: blur(5px);
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: var(--shadow-neon);
-            padding: 1rem;
-            width: 250px;
-            max-height: 300px;
-            overflow-y: auto;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(8px);
-            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
-            z-index: 1000;
-        }
-
-        .dropdown-content:not(.hidden) {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .control-card:last-child .dropdown-content {
-            left: auto;
-            right: 0;
-        }
-
-        .filter-group {
-            margin-bottom: 0.8rem;
-        }
-
-        .filter-group label {
-            display: block;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-bottom: 0.3rem;
-        }
-
-        .input-wrapper {
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
-
-        .input-icon {
-            position: absolute;
-            left: 0.8rem;
-            width: 16px;
-            height: 16px;
-            stroke: var(--text-muted);
-        }
-
-        input, select {
-            width: 100%;
-            padding: 0.5rem 0.8rem 0.5rem 2.5rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-            color: var(--text-color);
-            font-size: 0.85rem;
-            transition: border-color 0.2s ease;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 4px rgba(30, 64, 175, 0.2);
-        }
-
-        .btn-primary {
-            background: var(--primary-color);
-            color: var(--text-color);
-        }
-
-        .btn-secondary {
-            background: transparent;
-            border: 1px solid var(--primary-color);
-            color: var(--primary-color);
-        }
-
-        /* Tabela e Grade */
-        #devicesTable, #devicesGrid {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        table {
-            background: var(--frosted-bg);
-            border-radius: 8px;
-            box-shadow: var(--shadow-neon);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        th {
-            background: var(--primary-color);
-            color: var(--text-color);
-            padding: 0.8rem;
-        }
-
-        .grid-view {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-        }
-
-        .device-card {
-            background: var(--frosted-bg);
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: var(--shadow-neon);
-            padding: 1rem;
-        }
-
-        /* Paginação */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-top: 2rem;
-        }
-
-        .pagination .btn {
-            padding: 0.5rem 1rem;
-        }
-
-        #pageInfo {
-            font-size: 0.9rem;
-            color: var(--text-muted);
-        }
-
-        /* Loading */
-        #loading {
-            display: flex;
-            justify-content: center;
-            font-size: 1rem;
-            color: var(--text-muted);
-            margin: 2rem 0;
-        }
-
-        /* Animação de fade-in */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-15px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Responsividade */
+        /* Ajuste responsivo para efeitos de iluminação */
         @media (max-width: 768px) {
-            body {
-                padding: 1rem;
-            }
-
-            .controls {
-                flex-direction: column;
-                width: 100%;
-            }
-
-            .btn {
-                width: 100%;
-                justify-content: center;
-                font-size: 0.85rem;
-            }
-
-            .header-title {
-                font-size: 1.8rem;
-            }
-
             #cursor-aura {
                 width: 100px;
                 height: 100px;
@@ -365,15 +183,6 @@ $htmlContent = @"
                 width: 6px !important;
                 height: 6px !important;
             }
-
-            .dropdown-content {
-                width: 100%;
-                max-width: calc(100vw - 2rem);
-            }
-
-            #devicesTable, #devicesGrid {
-                max-width: 100%;
-            }
         }
     </style>
 </head>
@@ -382,22 +191,22 @@ $htmlContent = @"
     <div id="cursor-aura"></div>
     <header class="header">
         <h1 class="header-title">Intune Report Manager</h1>
-        <p class="subtitle">Dispositivos sincronizados nos últimos 90 dias</p>
+        <p class="subtitle">Dispositivos sincronizados nos últimos $ActiveDeviceSyncDays dias.</p>
     </header>
 
-    <section class="welcome">
-        <h2 class="welcome-title">Bem-vindo</h2>
-        <p>Gerencie ${devices.length} dispositivos com filtros e visualizações otimizadas.</p>
+    <section class="welcome animate-fade">
+        <h2 class="welcome-title">Bem vindo!</h2>
+        <p>Explore e gerencie $($devices.Count) dispositivos com filtros avançados, visualizações personalizadas e ordenação inteligente.</p>
     </section>
 
     <div class="controls frosted-glass">
         <div class="control-card">
             <button id="toggleFilters" class="btn">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M4 4h16v2H4zM4 10h16v2H4zM4 16h16v2H4z" />
+                <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M6 12h12M9 18h6"></path>
                 </svg>
-                Filtros
-                <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                Filtros Avançados
+                <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
             </button>
@@ -405,8 +214,9 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="deviceNameFilter">Nome do Dispositivo</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.3-4.3"></path>
                         </svg>
                         <input type="text" id="deviceNameFilter" placeholder="Pesquisar...">
                     </div>
@@ -414,9 +224,9 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="userPrincipalNameFilter">Usuário</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 12m-4-4a4 4 0 1 0 8 0a4 4 0 1 0-8 0" />
-                            <path d="M16 18v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 12m-4-4a4 4 0 1 0 8 0a4 4 0 1 0-8 0"></path>
+                            <path d="M16 18v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                         </svg>
                         <input type="text" id="userPrincipalNameFilter" placeholder="Pesquisar...">
                     </div>
@@ -430,8 +240,8 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="osVersionFilter">Versão do SO</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 4h16v16H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                         </svg>
                         <input type="text" id="osVersionFilter" placeholder="Pesquisar...">
                     </div>
@@ -451,8 +261,8 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="serialNumberFilter">Número de Série</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 4h16v16H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16v16H4z"></path>
                         </svg>
                         <input type="text" id="serialNumberFilter" placeholder="Pesquisar...">
                     </div>
@@ -460,8 +270,11 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="lastSyncDateStart">Última Sinc. (Início)</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 4h12v2H6zM4 8h16v12H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <path d="M16 2v4"></path>
+                            <path d="M8 2v4"></path>
+                            <path d="M3 10h18"></path>
                         </svg>
                         <input type="date" id="lastSyncDateStart">
                     </div>
@@ -469,8 +282,11 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="lastSyncDateEnd">Última Sinc. (Fim)</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 4h12v2H6zM4 8h16v12H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <path d="M16 2v4"></path>
+                            <path d="M8 2v4"></path>
+                            <path d="M3 10h18"></path>
                         </svg>
                         <input type="date" id="lastSyncDateEnd">
                     </div>
@@ -486,8 +302,8 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="totalStorageMin">Armazenamento Total (Mín. GB)</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 4h16v16H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16v16H4z"></path>
                         </svg>
                         <input type="number" id="totalStorageMin" placeholder="Mínimo">
                     </div>
@@ -495,8 +311,8 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="totalStorageMax">Armazenamento Total (Máx. GB)</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 4h16v16H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16v16H4z"></path>
                         </svg>
                         <input type="number" id="totalStorageMax" placeholder="Máximo">
                     </div>
@@ -504,8 +320,8 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="freeStorageMin">Armazenamento Livre (Mín. GB)</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 4h16v16H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16v16H4z"></path>
                         </svg>
                         <input type="number" id="freeStorageMin" placeholder="Mínimo">
                     </div>
@@ -513,8 +329,8 @@ $htmlContent = @"
                 <div class="filter-group">
                     <label for="freeStorageMax">Armazenamento Livre (Máx. GB)</label>
                     <div class="input-wrapper">
-                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 4h16v16H4z" />
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16v16H4z"></path>
                         </svg>
                         <input type="number" id="freeStorageMax" placeholder="Máximo">
                     </div>
@@ -527,26 +343,70 @@ $htmlContent = @"
         </div>
         <div class="control-card">
             <button id="toggleColumns" class="btn">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M12 2v20M2 12h20" />
+                <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M6 12h12M9 18h6"></path>
                 </svg>
-                Colunas
-                <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                Selecionar Colunas
+                <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
             </button>
             <div id="columnPanel" class="dropdown-content hidden">
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="deviceName" checked> Nome do Dispositivo</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="userPrincipalName" checked> Usuário</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="operatingSystem" checked> Sistema Operacional</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="osVersion" checked> Versão do SO</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="manufacturer" checked> Fabricante</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="model" checked> Modelo</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="serialNumber" checked> Número de Série</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="lastSyncDateTime" checked> Última Sincronização</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="complianceState" checked> Conformidade</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="totalStorageGB" checked> Armazenamento Total</label>
-                <label class="checkbox-label"><input type="checkbox" class="column-toggle" data-column="freeStorageGB" checked> Armazenamento Livre</label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="deviceName" checked>
+                    <span class="checkbox-custom"></span>
+                    Nome do Dispositivo
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="userPrincipalName" checked>
+                    <span class="checkbox-custom"></span>
+                    Usuário
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="operatingSystem" checked>
+                    <span class="checkbox-custom"></span>
+                    Sistema Operacional
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="osVersion" checked>
+                    <span class="checkbox-custom"></span>
+                    Versão do SO
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="manufacturer" checked>
+                    <span class="checkbox-custom"></span>
+                    Fabricante
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="model" checked>
+                    <span class="checkbox-custom"></span>
+                    Modelo
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="serialNumber" checked>
+                    <span class="checkbox-custom"></span>
+                    Número de Série
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="lastSyncDateTime" checked>
+                    <span class="checkbox-custom"></span>
+                    Última Sincronização
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="complianceState" checked>
+                    <span class="checkbox-custom"></span>
+                    Conformidade
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="totalStorageGB" checked>
+                    <span class="checkbox-custom"></span>
+                    Armazenamento Total
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="column-toggle" data-column="freeStorageGB" checked>
+                    <span class="checkbox-custom"></span>
+                    Armazenamento Livre
+                </label>
                 <button id="applyColumns" class="btn btn-primary">Aplicar</button>
             </div>
         </div>
@@ -567,10 +427,10 @@ $htmlContent = @"
         </div>
         <div class="control-card">
             <button id="toggleView" class="btn">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M12 2l10 6-10 6-10-6 10-6zM2 12l10  ASCIId6 10-6z" />
+                <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6"></path>
                 </svg>
-                Grade
+                Ver como Grade
             </button>
         </div>
     </div>
@@ -583,24 +443,26 @@ $htmlContent = @"
         <table>
             <thead>
                 <tr>
-                    <th data-column="deviceName">Nome do Dispositivo<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="userPrincipalName">Usuário<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="operatingSystem">SO<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="osVersion">Versão do SO<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="manufacturer">Fabricante<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="model">Modelo<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="serialNumber">Número de Série<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="lastSyncDateTime">Última Sincronização<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="complianceState">Conformidade<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="totalStorageGB">Armazenamento Total (GB)<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
-                    <th data-column="freeStorageGB">Armazenamento Livre (GB)<svg class="sort-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="deviceName">Nome do Dispositivo<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="userPrincipalName">Usuário<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="operatingSystem">SO<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="osVersion">Versão do SO<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="manufacturer">Fabricante<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="model">Modelo<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="serialNumber">Número de Série<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="lastSyncDateTime">Última Sincronização<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="complianceState">Conformidade<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="totalStorageGB">Armazenamento Total (GB)<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
+                    <th data-column="freeStorageGB">Armazenamento Livre (GB)<svg class="sort-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
 
-    <div id="devicesGrid" class="grid-view hidden"></div>
+    <div id="devicesGrid" class="grid-view hidden">
+        <div id="gridContainer"></div>
+    </div>
 
     <div class="pagination">
         <button id="prevPage" class="btn">◄ Anterior</button>
@@ -609,72 +471,19 @@ $htmlContent = @"
     </div>
 
     <script>
-        const devices = ${devicesJson};
-
-        // Efeitos de iluminação
-        const particleContainer = document.getElementById('particle-container');
-        document.addEventListener('mousemove', (e) => {
-            // Partículas
-            const particle = document.createElement('div');
-            particle.className = 'particle';
-            const size = Math.random() * 8 + 4;
-            particle.style.width = `${size}px`;
-            particle.style.height = `${size}px`;
-            particle.style.left = `${e.clientX}px`;
-            particle.style.top = `${e.clientY}px`;
-            particle.style.opacity = Math.random() * 0.5 + 0.3;
-            particleContainer.appendChild(particle);
-            setTimeout(() => particle.remove(), 1000);
-
-            // Aura
-            const aura = document.getElementById('cursor-aura');
-            aura.style.left = `${e.clientX}px`;
-            aura.style.top = `${e.clientY}px`;
-        });
-
-        // Funcionalidade dos dropdowns
-        document.getElementById('toggleFilters').addEventListener('click', (e) => {
-            e.preventDefault();
-            const panel = document.getElementById('filterPanel');
-            const button = e.currentTarget;
-            const otherPanel = document.getElementById('columnPanel');
-            otherPanel.classList.add('hidden');
-            panel.classList.toggle('hidden');
-            const isHidden = panel.classList.contains('hidden');
-            button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-        });
-
-        document.getElementById('toggleColumns').addEventListener('click', (e) => {
-            e.preventDefault();
-            const panel = document.getElementById('columnPanel');
-            const button = e.currentTarget;
-            const otherPanel = document.getElementById('filterPanel');
-            otherPanel.classList.add('hidden');
-            panel.classList.toggle('hidden');
-            const isHidden = panel.classList.contains('hidden');
-            button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-        });
-
-        document.addEventListener('click', (e) => {
-            const dropdowns = document.querySelectorAll('.dropdown-content');
-            dropdowns.forEach(panel => {
-                const card = panel.closest('.control-card');
-                if (!card.contains(e.target)) {
-                    panel.classList.add('hidden');
-                    const button = card.querySelector('.btn');
-                    const arrow = button.querySelector('.arrow');
-                    if (arrow) arrow.style.transform = 'rotate(0deg)';
-                }
-            });
-        });
+        window.devices = ${devicesJson};
     </script>
     <script src="https://intune-management.vercel.app/script.js"></script>
 </body>
 </html>
 "@
+    $htmlContent | Out-File -FilePath $HtmlPath -Encoding UTF8 -Force
+    Write-Status "Relatório HTML salvo com sucesso!" -Color Green
+}
+catch {
+    Write-Status "Erro ao salvar relatório: $($_.Exception.Message)" -Color Red
+    Write-Status "Tente especificar um caminho diferente usando -OutputDir." -Color Yellow
+    exit
+}
 
-# Salva o HTML em um arquivo
-$htmlContent | Out-File -FilePath ".\IntuneReport.html" -Encoding UTF8
-
-# Abre o relatório no navegador padrão
-Start-Process ".\IntuneReport.html"
+Write-Status "Processo concluído." -Color Green
