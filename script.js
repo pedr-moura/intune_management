@@ -40,7 +40,7 @@ function debounce(func, wait) {
 
 // Exibe/oculta loading com animação
 function showLoading(show) {
-    const loading = document.getElementById('loading');
+    const loading = document.getDElementById('loading');
     loading.style.display = show ? 'flex' : 'none';
     if (show) {
         loading.classList.add('animate-pulse');
@@ -292,21 +292,22 @@ function applyColumns() {
     renderPage();
 }
 
-// MODIFICADO: Fecha dropdowns ao clicar fora
+// Fecha dropdowns ao clicar fora
 function closeDropdowns(event) {
-    const activeCard = document.querySelector('.control-card.is-active');
-    if (activeCard && !activeCard.contains(event.target)) {
-        const panel = activeCard.querySelector('.dropdown-content');
-        const button = activeCard.querySelector('.btn.active');
-        const arrow = button.querySelector('.arrow');
-
-        panel.classList.add('hidden');
-        button.classList.remove('active');
-        activeCard.classList.remove('is-active');
-        if (arrow) {
-            arrow.style.transform = 'rotate(0deg)';
+    const dropdowns = document.querySelectorAll('.dropdown-content');
+    dropdowns.forEach(panel => {
+        const card = panel.closest('.control-card');
+        if (!card.contains(event.target)) {
+            panel.classList.add('hidden');
+            card.classList.remove('is-active');
+            const button = card.querySelector('.btn');
+            const arrow = button.querySelector('.arrow');
+            if (arrow) {
+                arrow.style.transform = 'rotate(0deg)';
+            }
+            button.classList.remove('active');
         }
-    }
+    });
 }
 
 // Adiciona eventos
@@ -340,68 +341,77 @@ document.getElementById('freeStorageMax').addEventListener('input', (e) => {
     debouncedApplyFilters();
 });
 document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
-document.getElementById('toggleView').addEventListener('click', (e) => {
-    e.stopPropagation();
+document.getElementById('toggleView').addEventListener('click', () => {
     isGridView = !isGridView;
     document.getElementById('toggleView').innerHTML = `
-    <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M${isGridView ? '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6' : '12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}" />
-    </svg>
-    Ver como ${isGridView ? 'Lista' : 'Grade'}
+        <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="${isGridView ? '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6' : '12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}" />
+        </svg>
+        Ver como ${isGridView ? 'Lista' : 'Grade'}
     `;
     renderPage();
 });
-document.getElementById('prevPage').addEventListener('click', (e) => { e.stopPropagation(); if (currentPage > 1) { currentPage--; renderPage(); } });
-document.getElementById('nextPage').addEventListener('click', (e) => { e.stopPropagation(); const totalPages = Math.ceil(filteredDevices.length / rowsPerPage); if (currentPage < totalPages) { currentPage++; renderPage(); } });
+document.getElementById('prevPage').addEventListener('click', () => {
+    if (currentPage > 1) {
+        currentPage--;
+        renderPage();
+    }
+});
+document.getElementById('nextPage').addEventListener('click', () => {
+    const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderPage();
+    }
+});
 
-// MODIFICADO: Listener para o botão de Filtros
+// Gerencia dropdowns de filtros
 document.getElementById('toggleFilters').addEventListener('click', (e) => {
-    e.stopPropagation();
     e.preventDefault();
-    const button = e.currentTarget;
-    const card = button.closest('.control-card');
     const panel = document.getElementById('filterPanel');
-
-    // Fecha o outro dropdown se estiver aberto
-    document.getElementById('columnPanel').classList.add('hidden');
-    const otherButton = document.getElementById('toggleColumns');
-    otherButton.classList.remove('active');
-    otherButton.closest('.control-card').classList.remove('is-active');
-    otherButton.querySelector('.arrow').style.transform = 'rotate(0deg)';
-
-    // Alterna o estado do dropdown atual
-    const isNowHidden = panel.classList.toggle('hidden');
-    button.classList.toggle('active', !isNowHidden);
-    card.classList.toggle('is-active', !isNowHidden);
-    button.querySelector('.arrow').style.transform = isNowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-});
-
-// MODIFICADO: Listener para o botão de Colunas
-document.getElementById('toggleColumns').addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
     const button = e.currentTarget;
     const card = button.closest('.control-card');
-    const panel = document.getElementById('columnPanel');
+    const otherPanel = document.getElementById('columnPanel');
 
-    // Fecha o outro dropdown se estiver aberto
-    document.getElementById('filterPanel').classList.add('hidden');
-    const otherButton = document.getElementById('toggleFilters');
-    otherButton.classList.remove('active');
-    otherButton.closest('.control-card').classList.remove('is-active');
-    otherButton.querySelector('.arrow').style.transform = 'rotate(0deg)';
+    // Fecha o outro dropdown
+    otherPanel.classList.add('hidden');
+    document.getElementById('toggleColumns').classList.remove('active');
+    document.getElementById('toggleColumns').closest('.control-card').classList.remove('is-active');
+    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
 
-    // Alterna o estado do dropdown atual
-    const isNowHidden = panel.classList.toggle('hidden');
-    button.classList.toggle('active', !isNowHidden);
-    card.classList.toggle('is-active', !isNowHidden);
-    button.querySelector('.arrow').style.transform = isNowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+    // Alterna o dropdown atual
+    panel.classList.toggle('hidden');
+    const isHidden = panel.classList.contains('hidden');
+    button.classList.toggle('active', !isHidden);
+    card.classList.toggle('is-active', !isHidden);
+    button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
 });
 
-document.getElementById('applyColumns').addEventListener('click', (e) => { e.stopPropagation(); applyColumns(); });
+// Gerencia dropdowns de colunas
+document.getElementById('toggleColumns').addEventListener('click', (e) => {
+    e.preventDefault();
+    const panel = document.getElementById('columnPanel');
+    const button = e.currentTarget;
+    const card = button.closest('.control-card');
+    const otherPanel = document.getElementById('filterPanel');
+
+    // Fecha o outro dropdown
+    otherPanel.classList.add('hidden');
+    document.getElementById('toggleFilters').classList.remove('active');
+    document.getElementById('toggleFilters').closest('.control-card').classList.remove('is-active');
+    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
+
+    // Alterna o dropdown atual
+    panel.classList.toggle('hidden');
+    const isHidden = panel.classList.contains('hidden');
+    button.classList.toggle('active', !isHidden);
+    card.classList.toggle('is-active', !isHidden);
+    button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+});
+
+document.getElementById('applyColumns').addEventListener('click', applyColumns);
 document.querySelectorAll('th').forEach(th => {
-    th.addEventListener('click', (e) => {
-        e.stopPropagation();
+    th.addEventListener('click', () => {
         const column = th.dataset.column;
         if (column) sortDevices(column);
     });
@@ -415,10 +425,4 @@ window.onload = () => {
     loadVisibleColumns();
     renderPage();
     document.querySelectorAll('.animate-fade').forEach(el => el.classList.add('visible'));
-    document.getElementById('toggleView').innerHTML = `
-        <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6" />
-        </svg>
-        Ver como Grade
-    `;
 };
