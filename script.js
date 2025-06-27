@@ -40,7 +40,7 @@ function debounce(func, wait) {
 
 // Exibe/oculta loading com animação
 function showLoading(show) {
-    const loading = document.getDElementById('loading');
+    const loading = document.getElementById('loading');
     loading.style.display = show ? 'flex' : 'none';
     if (show) {
         loading.classList.add('animate-pulse');
