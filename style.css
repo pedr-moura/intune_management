@@ -227,6 +227,13 @@ body {
     font-size: 0.9rem;
 }
 
+#gridContainer{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+}
+
 .device-image {
     max-width: 170px;
     height: auto;
