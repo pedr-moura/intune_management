@@ -220,8 +220,8 @@ function applyFilters() {
             const syncDate = device.lastSyncDateTime !== "N/A" ? new Date(device.lastSyncDateTime) : null;
             const startDate = lastSyncDateStart ? new Date(lastSyncDateStart) : null;
             const endDate = lastSyncDateEnd ? new Date(lastSyncDateEnd) : null;
-            lastSyncDateMatch = syncDate && 
-                (!startDate || syncDate >= startDate) && 
+            lastSyncDateMatch = syncDate &&
+                (!startDate || syncDate >= startDate) &&
                 (!endDate || syncDate <= endDate);
         }
         return deviceNameMatch && userPrincipalNameMatch && operatingSystemMatch && osVersionMatch &&
@@ -292,33 +292,27 @@ function applyColumns() {
     renderPage();
 }
 
-// Fecha dropdowns ao clicar fora com animação
+// MODIFICADO: Fecha dropdowns ao clicar fora
 function closeDropdowns(event) {
-    const filterPanel = document.getElementById('filterPanel');
-    const columnPanel = document.getElementById('columnPanel');
-    const toggleFilters = document.getElementById('toggleFilters');
-    const toggleColumns = document.getElementById('toggleColumns');
+    const activeCard = document.querySelector('.control-card.is-active');
+    if (activeCard && !activeCard.contains(event.target)) {
+        const panel = activeCard.querySelector('.dropdown-content');
+        const button = activeCard.querySelector('.btn.active');
+        const arrow = button.querySelector('.arrow');
 
-    if (!event.target.closest('.dropdown')) {
-        filterPanel.classList.add('hidden');
-        toggleFilters.classList.remove('active');
-        toggleFilters.querySelector('.arrow').style.transform = 'rotate(0deg)';
-        columnPanel.classList.add('hidden');
-        toggleColumns.classList.remove('active');
-        toggleColumns.querySelector('.arrow').style.transform = 'rotate(0deg)';
+        panel.classList.add('hidden');
+        button.classList.remove('active');
+        activeCard.classList.remove('is-active');
+        if (arrow) {
+            arrow.style.transform = 'rotate(0deg)';
+        }
     }
-}
-
-// Função para logar o z-index de um elemento
-function logZIndex(element, action) {
-    const zIndex = window.getComputedStyle(element).getPropertyValue('z-index');
-    console.log(`Z-index de ${element.id || element.className} durante ${action}: ${zIndex}`);
 }
 
 // Adiciona eventos
 const debouncedApplyFilters = debounce(applyFilters, 300);
-document.getElementById('applyFilters').addEventListener('click', () => { console.log('Botão "Aplicar Filtros" clicado'); applyFilters(); });
-document.getElementById('clearFilters').addEventListener('click', () => { console.log('Botão "Limpar Filtros" clicado'); clearFilters(); });
+document.getElementById('applyFilters').addEventListener('click', applyFilters);
+document.getElementById('clearFilters').addEventListener('click', clearFilters);
 document.getElementById('deviceNameFilter').addEventListener('input', debouncedApplyFilters);
 document.getElementById('userPrincipalNameFilter').addEventListener('input', debouncedApplyFilters);
 document.getElementById('osVersionFilter').addEventListener('input', debouncedApplyFilters);
@@ -346,66 +340,70 @@ document.getElementById('freeStorageMax').addEventListener('input', (e) => {
     debouncedApplyFilters();
 });
 document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
-document.getElementById('toggleView').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Alternar Visualização" clicado'); isGridView = !isGridView; document.getElementById('toggleView').innerHTML = `
+document.getElementById('toggleView').addEventListener('click', (e) => {
+    e.stopPropagation();
+    isGridView = !isGridView;
+    document.getElementById('toggleView').innerHTML = `
     <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M${isGridView ? '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6' : '12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}" />
     </svg>
     Ver como ${isGridView ? 'Lista' : 'Grade'}
-`; renderPage(); });
-document.getElementById('prevPage').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Página Anterior" clicado'); if (currentPage > 1) { currentPage--; renderPage(); } });
-document.getElementById('nextPage').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Próxima Página" clicado'); const totalPages = Math.ceil(filteredDevices.length / rowsPerPage); if (currentPage < totalPages) { currentPage++; renderPage(); } });
-document.getElementById('toggleFilters').addEventListener('click', (e) => { 
-    e.stopPropagation(); 
-    console.log('Botão "Filtros Avançados" clicado'); 
-    e.preventDefault(); 
-    const filterPanel = document.getElementById('filterPanel'); 
-    const isHidden = filterPanel.classList.toggle('hidden'); 
-    document.getElementById('toggleFilters').classList.toggle('active', !isHidden); 
-    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; 
-    if (!isHidden) { 
-        document.getElementById('columnPanel').classList.add('hidden'); 
-        document.getElementById('toggleColumns').classList.remove('active'); 
-        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)'; 
-    } 
-    filterPanel.style.opacity = isHidden ? '0' : '1'; 
-    filterPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; 
-    logZIndex(filterPanel, isHidden ? 'ocultando' : 'exibindo'); 
-    logZIndex(document.querySelector('.controls'), 'contexto');
+    `;
+    renderPage();
 });
-document.getElementById('toggleColumns').addEventListener('click', (e) => { 
-    e.stopPropagation(); 
-    console.log('Botão "Selecionar Colunas" clicado'); 
-    e.preventDefault(); 
-    const columnPanel = document.getElementById('columnPanel'); 
-    const isHidden = columnPanel.classList.toggle('hidden'); 
-    document.getElementById('toggleColumns').classList.toggle('active', !isHidden); 
-    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; 
-    if (!isHidden) { 
-        document.getElementById('filterPanel').classList.add('hidden'); 
-        document.getElementById('toggleFilters').classList.remove('active'); 
-        document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)'; 
-    } 
-    columnPanel.style.opacity = isHidden ? '0' : '1'; 
-    columnPanel.style.transform = isHidden ? 'translateY(-10px)' : 'translateY(0)'; 
-    logZIndex(columnPanel, isHidden ? 'ocultando' : 'exibindo'); 
-    logZIndex(document.querySelector('.controls'), 'contexto');
+document.getElementById('prevPage').addEventListener('click', (e) => { e.stopPropagation(); if (currentPage > 1) { currentPage--; renderPage(); } });
+document.getElementById('nextPage').addEventListener('click', (e) => { e.stopPropagation(); const totalPages = Math.ceil(filteredDevices.length / rowsPerPage); if (currentPage < totalPages) { currentPage++; renderPage(); } });
+
+// MODIFICADO: Listener para o botão de Filtros
+document.getElementById('toggleFilters').addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const button = e.currentTarget;
+    const card = button.closest('.control-card');
+    const panel = document.getElementById('filterPanel');
+
+    // Fecha o outro dropdown se estiver aberto
+    document.getElementById('columnPanel').classList.add('hidden');
+    const otherButton = document.getElementById('toggleColumns');
+    otherButton.classList.remove('active');
+    otherButton.closest('.control-card').classList.remove('is-active');
+    otherButton.querySelector('.arrow').style.transform = 'rotate(0deg)';
+
+    // Alterna o estado do dropdown atual
+    const isNowHidden = panel.classList.toggle('hidden');
+    button.classList.toggle('active', !isNowHidden);
+    card.classList.toggle('is-active', !isNowHidden);
+    button.querySelector('.arrow').style.transform = isNowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
 });
-document.getElementById('applyColumns').addEventListener('click', (e) => { e.stopPropagation(); console.log('Botão "Aplicar Seleção de Colunas" clicado'); applyColumns(); });
+
+// MODIFICADO: Listener para o botão de Colunas
+document.getElementById('toggleColumns').addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const button = e.currentTarget;
+    const card = button.closest('.control-card');
+    const panel = document.getElementById('columnPanel');
+
+    // Fecha o outro dropdown se estiver aberto
+    document.getElementById('filterPanel').classList.add('hidden');
+    const otherButton = document.getElementById('toggleFilters');
+    otherButton.classList.remove('active');
+    otherButton.closest('.control-card').classList.remove('is-active');
+    otherButton.querySelector('.arrow').style.transform = 'rotate(0deg)';
+
+    // Alterna o estado do dropdown atual
+    const isNowHidden = panel.classList.toggle('hidden');
+    button.classList.toggle('active', !isNowHidden);
+    card.classList.toggle('is-active', !isNowHidden);
+    button.querySelector('.arrow').style.transform = isNowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+});
+
+document.getElementById('applyColumns').addEventListener('click', (e) => { e.stopPropagation(); applyColumns(); });
 document.querySelectorAll('th').forEach(th => {
     th.addEventListener('click', (e) => {
         e.stopPropagation();
         const column = th.dataset.column;
         if (column) sortDevices(column);
-    });
-});
-
-// Adiciona logs de z-index ao passar o mouse
-document.querySelectorAll('.dropdown-content, .btn').forEach(element => {
-    element.addEventListener('mouseover', (e) => {
-        logZIndex(e.target, 'mouseover');
-    });
-    element.addEventListener('mouseout', (e) => {
-        logZIndex(e.target, 'mouseout');
     });
 });
 
