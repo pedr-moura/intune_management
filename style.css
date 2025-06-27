@@ -1,6 +1,6 @@
 /* --- Estilo Premium com Barra de Ferramentas Unificada --- */
 :root {
-    --bg-color: #111827;
+    --bg-color: #0d121f; /* Fundo mais escuro */
     --card-bg: #1f2937;
     --border-color: #374151;
     --text-color: #d1d5db;
@@ -71,7 +71,7 @@ body {
     display: none;
 }
 
-#devicesTable{
+#devicesTable {
     overflow: auto;
 }
 
@@ -85,6 +85,7 @@ body {
     gap: 0.5rem;
     box-shadow: var(--shadow);
     margin-bottom: 2rem;
+    backdrop-filter: blur(5px); /* Efeito de vidro fosco */
 }
 
 .control-card {
@@ -176,6 +177,7 @@ body {
     opacity: 0;
     transition: opacity var(--transition-duration), transform var(--transition-duration);
     visibility: hidden;
+    backdrop-filter: blur(5px); /* Efeito de vidro fosco nos dropdowns */
 }
 
 .dropdown-content:not(.hidden) {
