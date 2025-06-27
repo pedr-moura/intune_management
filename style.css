@@ -1,4 +1,4 @@
-/* --- Estilo Premium com Barra de Ferramentas Unificada e Grade Dinâmica --- */
+/* --- Estilo Premium com Barra de Ferramentas Unificada --- */
 :root {
     --bg-color: #111827;
     --card-bg: #1f2937;
@@ -25,29 +25,26 @@ body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     margin: 0;
     padding: 2rem;
-    min-height: 100vh;
+    overflow-x: hidden;
 }
 
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
+
 ::-webkit-scrollbar-track {
     background-color: var(--card-bg);
 }
+
 ::-webkit-scrollbar-thumb {
     background-color: var(--border-color);
     border-radius: 8px;
     border: 2px solid var(--card-bg);
 }
+
 ::-webkit-scrollbar-thumb:hover {
     background-color: color-mix(in srgb, var(--border-color) 80%, white);
-}
-
-/* --- Layout Principal --- */
-.container {
-    max-width: 1800px;
-    margin: 0 auto;
 }
 
 .header {
@@ -62,17 +59,18 @@ body {
     font-size: 2rem;
     font-weight: 700;
     color: #ffffff;
-    margin: 0;
 }
 
 .subtitle {
     font-size: 1rem;
     color: var(--text-muted);
     margin-top: 0.25rem;
-    margin-bottom: 0;
 }
 
-/* --- Barra de Controles --- */
+.header-icons {
+    display: none;
+}
+
 .controls {
     display: flex;
     align-items: center;
@@ -83,10 +81,6 @@ body {
     gap: 0.5rem;
     box-shadow: var(--shadow);
     margin-bottom: 2rem;
-    position: relative;
-    overflow: visible;
-    z-index: 100;
-    flex-wrap: wrap;
 }
 
 .control-card {
@@ -99,11 +93,11 @@ body {
     transition: none;
     position: relative;
     display: flex;
-    z-index: 10;
 }
 
-.control-card.is-active {
-    z-index: 20;
+.control-card:hover {
+    transform: none;
+    box-shadow: none;
 }
 
 .control-card:nth-child(1),
@@ -118,6 +112,10 @@ body {
 
 .control-card:nth-child(2) .btn {
     border-radius: 0;
+}
+
+.control-card:nth-child(3) {
+    border-right: none;
 }
 
 .control-card:nth-child(3) .btn {
@@ -135,7 +133,9 @@ body {
     padding: 0.6rem 1.2rem;
     color: var(--text-muted);
     transition: background-color var(--transition-duration), color var(--transition-duration);
-    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .controls .btn:hover {
@@ -154,11 +154,11 @@ body {
     outline: none;
 }
 
-/* --- Dropdowns --- */
 .dropdown-content {
     position: absolute;
-    top: calc(100% + 5px);
+    top: calc(100% + 12px);
     left: 0;
+    transform: none;
     z-index: 1000;
     background: var(--card-bg);
     border-radius: var(--border-radius);
@@ -166,18 +166,18 @@ body {
     border: 1px solid var(--border-color);
     padding: 1.5rem;
     width: 350px;
-    max-height: calc(100vh - 200px);
+    max-width: min(350px, calc(100vw - 2rem));
+    max-height: calc(100vh - 100px);
     overflow-y: auto;
     opacity: 0;
-    visibility: hidden;
     transition: opacity var(--transition-duration), transform var(--transition-duration);
-    transform: translateY(-10px);
+    visibility: hidden;
 }
 
-.dropdown-content.show {
+.dropdown-content:not(.hidden) {
     opacity: 1;
-    visibility: visible;
     transform: translateY(0);
+    visibility: visible;
 }
 
 .control-card:last-child .dropdown-content {
@@ -185,53 +185,53 @@ body {
     right: 0;
 }
 
-.dropdown-section {
-    margin-bottom: 1rem;
+.control-card .dropdown-content {
+    right: auto;
+    left: 0;
+    transform: none;
+    max-width: min(350px, calc(100vw - 2rem));
 }
 
-.dropdown-section:last-child {
-    margin-bottom: 0;
+.control-card:last-child .dropdown-content {
+    right: 0;
+    left: auto;
 }
 
-.dropdown-section-title {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-/* --- Grade de Dispositivos --- */
-.devices-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-
+.welcome,
 .device-card {
     background: var(--card-bg);
     padding: 1.5rem;
     border-radius: var(--border-radius);
+    margin-bottom: 2rem;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-color);
-    transition: var(--transition);
-    display: flex;
-    flex-direction: column;
-    height: 100%;
 }
 
-.device-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
+.welcome-title {
+    font-size: 1.25rem;
 }
 
-/* --- Componentes de Formulário --- */
+.device-card h2 {
+    font-size: 1.1rem;
+    margin: 0.5rem 0;
+}
+
+.device-card p {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+}
+
+.device-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius);
+    margin-bottom: 0.5rem;
+}
+
 .input-wrapper {
     position: relative;
     display: flex;
     align-items: center;
-    margin-bottom: 1rem;
 }
 
 .input-icon {
@@ -277,7 +277,6 @@ select {
     background-color: var(--bg-color);
 }
 
-/* --- Checkbox Personalizado --- */
 .checkbox-label {
     display: flex;
     align-items: center;
@@ -286,7 +285,6 @@ select {
     cursor: pointer;
     padding: 0.25rem 0;
     transition: color var(--transition-duration);
-    user-select: none;
 }
 
 .checkbox-label:hover {
@@ -338,20 +336,14 @@ select {
     box-shadow: var(--focus-shadow);
 }
 
-/* --- Tabela --- */
-.table-container {
-    overflow-x: auto;
-    margin-bottom: 2rem;
-    border-radius: var(--border-radius);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow);
-}
-
 table {
     width: 100%;
     border-collapse: collapse;
     background: var(--card-bg);
-    min-width: 600px;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
 }
 
 th {
@@ -377,6 +369,7 @@ th:hover {
 .sort-icon {
     vertical-align: middle;
     margin-left: 0.5rem;
+    transition: transform var(--transition-duration);
 }
 
 td {
@@ -394,63 +387,192 @@ tr:hover td {
     background: #374151;
 }
 
-/* --- Responsividade --- */
-@media (max-width: 768px) {
-    body {
-        padding: 1rem;
-    }
-    
-    .devices-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .controls {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .control-card {
-        border-right: none !important;
-        margin-bottom: 0.5rem;
-    }
-    
-    .control-card .btn {
-        border-radius: var(--border-radius) !important;
-        width: 100%;
-        justify-content: flex-start;
-    }
-    
-    .control-card:last-child {
-        margin-left: 0;
-        margin-top: 0.5rem;
-    }
-    
-    .dropdown-content {
-        width: 100%;
-        max-width: 100vw;
-        left: 0 !important;
-        right: 0 !important;
-        transform: none !important;
-    }
-}
-
-/* --- Utilitários --- */
 .hidden {
     display: none !important;
 }
 
-.text-center {
-    text-align: center;
+.control-card {
+    z-index: 10;
 }
 
-.mt-1 { margin-top: 0.25rem; }
-.mt-2 { margin-top: 0.5rem; }
-.mt-3 { margin-top: 1rem; }
-.mt-4 { margin-top: 1.5rem; }
-.mt-5 { margin-top: 2rem; }
+.control-card.is-active {
+    z-index: 20;
+}
 
-.mb-1 { margin-bottom: 0.25rem; }
-.mb-2 { margin-bottom: 0.5rem; }
-.mb-3 { margin-bottom: 1rem; }
-.mb-4 { margin-bottom: 1.5rem; }
-.mb-5 { margin-bottom: 2rem; }
+.grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    padding: 0;
+}
+
+.grid-view .device-card {
+    margin-bottom: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.pagination .btn {
+    padding: 0.5rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.pagination .btn:hover {
+    background: var(--accent-color);
+    color: #ffffff;
+}
+
+.pagination .btn:disabled {
+    background: var(--card-bg);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+#pageInfo {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin: 2rem 0;
+}
+
+.loading-dot {
+    animation: dot 1.4s infinite;
+}
+
+.loading-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.loading-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes dot {
+    0%, 20% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-5px);
+    }
+    60% {
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .grid-view {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+
+    .dropdown-content {
+        width: 100%;
+        max-width: calc(100vw - 2rem);
+    }
+
+    .controls {
+        flex-wrap: wrap;
+    }
+
+    .control-card {
+        flex: 1;
+        min-width: 120px;
+    }
+
+    .controls .btn {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+}
+
+.filter-group {
+    margin-bottom: 1rem;
+}
+
+.filter-group label {
+    display: block;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+    color: var(--text-muted);
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.btn-primary {
+    background: var(--accent-color);
+    color: #ffffff;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+    border: none;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+.btn-secondary {
+    background: var(--card-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-secondary:hover {
+    background: var(--border-color);
+    color: #ffffff;
+}
+
+input.invalid {
+    border-color: var(--error-color);
+}
+
+.sort-asc .sort-icon {
+    transform: rotate(0deg);
+}
+
+.sort-desc .sort-icon {
+    transform: rotate(180deg);
+}
