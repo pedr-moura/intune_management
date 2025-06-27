@@ -32,7 +32,7 @@
         "Surface Laptop 4": "https://placehold.co/150?text=Surface+Laptop+4",
         "iPhone 12": "https://placehold.co/150?text=iPhone+12",
         "Latitude 3400": "https://placehold.co/150?text=Latitude+3400",
-        "default": "https://placehold.co/150?text=Sem+Imagem"
+        "default": "https://i.ibb.co/RT1GY4pt/microsoft-intune-logo-brandlogos-net-6p2c7-512x512.png"
     };
 
     let currentPage = 1;
