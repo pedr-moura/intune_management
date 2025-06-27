@@ -415,9 +415,12 @@ tr:hover td {
 }
 
 .grid-view .device-card {
-    margin-bottom: 0;
-    width: 100%;
+    max-width: 500px;
     box-sizing: border-box;
+    position: relative;
+    margin-bottom: 20px;
+    left: 50%;
+    transform: translate(-50%, 0px);
 }
 
 .pagination {
