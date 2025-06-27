@@ -38,9 +38,14 @@ function debounce(func, wait) {
     };
 }
 
-// Exibe/oculta loading
+// Exibe/oculta loading com animação
 function showLoading(show) {
-    document.getElementById('loading').style.display = show ? 'block' : 'none';
+    const loading = document.getElementById('loading');
+    loading.style.display = show ? 'flex' : 'none';
+    if (show) {
+        loading.classList.add('animate-pulse');
+        setTimeout(() => loading.classList.remove('animate-pulse'), 1000);
+    }
 }
 
 // Popula dropdowns com valores únicos
@@ -101,7 +106,7 @@ function updateTableColumns() {
     });
 }
 
-// Renderiza página atual
+// Renderiza página atual com animação
 function renderPage() {
     showLoading(true);
     setTimeout(() => {
@@ -111,7 +116,7 @@ function renderPage() {
 
         if (isGridView) {
             const gridHtml = pageDevices.map(device => `
-                <div class="device-card" title="Clique para detalhes">
+                <div class="device-card animate-fade-in" title="Clique para detalhes">
                     <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}">
                     <h2>${device.deviceName}</h2>
                     ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName}</p>` : ''}
@@ -129,7 +134,7 @@ function renderPage() {
             document.getElementById('devicesGrid').classList.remove('hidden');
         } else {
             const tableHtml = pageDevices.map(device => `
-                <tr title="Detalhes do dispositivo">
+                <tr class="animate-fade-in" title="Detalhes do dispositivo">
                     <td data-column="deviceName">${device.deviceName}</td>
                     <td data-column="userPrincipalName">${device.userPrincipalName}</td>
                     <td data-column="operatingSystem">${device.operatingSystem}</td>
@@ -158,12 +163,16 @@ function renderPage() {
     }, 100);
 }
 
-// Atualiza indicadores de ordenação
+// Atualiza indicadores de ordenação com ícones SVG
 function updateSortIndicators() {
     document.querySelectorAll('th').forEach(th => {
+        const sortIcon = th.querySelector('.sort-icon');
         th.classList.remove('sort-asc', 'sort-desc');
         if (th.dataset.column === sortKey) {
             th.classList.add(`sort-${sortOrder}`);
+            sortIcon.style.transform = sortOrder === 'asc' ? 'rotate(0deg)' : 'rotate(180deg)';
+        } else {
+            sortIcon.style.transform = 'rotate(0deg)';
         }
     });
 }
@@ -283,15 +292,15 @@ function applyColumns() {
     renderPage();
 }
 
-// Fecha dropdowns ao clicar fora
+// Fecha dropdowns ao clicar fora com animação
 function closeDropdowns(event) {
     if (!event.target.closest('.dropdown')) {
         document.getElementById('filterPanel').classList.add('hidden');
         document.getElementById('toggleFilters').classList.remove('active');
-        document.getElementById('toggleFilters').querySelector('.arrow').textContent = '▼';
+        document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
         document.getElementById('columnPanel').classList.add('hidden');
         document.getElementById('toggleColumns').classList.remove('active');
-        document.getElementById('toggleColumns').querySelector('.arrow').textContent = '▼';
+        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
     }
 }
 
@@ -328,7 +337,12 @@ document.getElementById('freeStorageMax').addEventListener('input', (e) => {
 document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
 document.getElementById('toggleView').addEventListener('click', () => {
     isGridView = !isGridView;
-    document.getElementById('toggleView').innerHTML = `<span class="icon">${isGridView ? '📋' : '🖼️'}</span> Ver como ${isGridView ? 'Lista' : 'Grade'}`;
+    document.getElementById('toggleView').innerHTML = `
+        <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M${isGridView ? '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6' : '12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}" />
+        </svg>
+        Ver como ${isGridView ? 'Lista' : 'Grade'}
+    `;
     renderPage();
 });
 document.getElementById('prevPage').addEventListener('click', () => {
@@ -348,19 +362,19 @@ document.getElementById('toggleFilters').addEventListener('click', () => {
     const filterPanel = document.getElementById('filterPanel');
     const isHidden = filterPanel.classList.toggle('hidden');
     document.getElementById('toggleFilters').classList.toggle('active', !isHidden);
-    document.getElementById('toggleFilters').querySelector('.arrow').textContent = isHidden ? '▼' : '▲';
+    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
     document.getElementById('columnPanel').classList.add('hidden');
     document.getElementById('toggleColumns').classList.remove('active');
-    document.getElementById('toggleColumns').querySelector('.arrow').textContent = '▼';
+    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
 });
 document.getElementById('toggleColumns').addEventListener('click', () => {
     const columnPanel = document.getElementById('columnPanel');
     const isHidden = columnPanel.classList.toggle('hidden');
     document.getElementById('toggleColumns').classList.toggle('active', !isHidden);
-    document.getElementById('toggleColumns').querySelector('.arrow').textContent = isHidden ? '▼' : '▲';
+    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
     document.getElementById('filterPanel').classList.add('hidden');
     document.getElementById('toggleFilters').classList.remove('active');
-    document.getElementById('toggleFilters').querySelector('.arrow').textContent = '▼';
+    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
 });
 document.getElementById('applyColumns').addEventListener('click', applyColumns);
 document.querySelectorAll('th').forEach(th => {
@@ -376,5 +390,11 @@ window.onload = () => {
     populateDropdowns();
     loadVisibleColumns();
     renderPage();
-    document.getElementById('toggleView').innerHTML = '<span class="icon">🖼️</span> Ver como Grade';
+    document.querySelectorAll('.animate-fade').forEach(el => el.classList.add('visible'));
+    document.getElementById('toggleView').innerHTML = `
+        <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6" />
+        </svg>
+        Ver como Grade
+    `;
 };
