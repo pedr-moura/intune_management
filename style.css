@@ -71,6 +71,10 @@ body {
     display: none;
 }
 
+#devicesTable{
+    overflow: auto;
+}
+
 .controls {
     display: flex;
     align-items: center;
