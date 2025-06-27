@@ -1,16 +1,31 @@
-let filteredDevices = [];
-let currentPage = 1;
-let rowsPerPage = 10;
-let isGridView = false;
-let sortColumn = 'deviceName';
-let sortDirection = 'asc';
-
 const modelImages = {
-    'Surface Pro 7': 'https://via.placeholder.com/150?text=Surface+Pro+7',
-    'iPhone 12': 'https://via.placeholder.com/150?text=iPhone+12',
-    'default': 'https://via.placeholder.com/150?text=Device'
+    "Surface Pro 7": "https://placehold.co/150?text=Surface+Pro+7",
+    "Surface Laptop 4": "https://placehold.co/150?text=Surface+Laptop+4",
+    "iPhone 12": "https://placehold.co/150?text=iPhone+12",
+    "Latitude 3400": "https://placehold.co/150?text=Latitude+3400",
+    "default": "https://placehold.co/150?text=Sem+Imagem"
 };
 
+let currentPage = 1;
+const rowsPerPage = 100;
+let isGridView = false;
+let filteredDevices = [...devices];
+let sortKey = 'deviceName';
+let sortOrder = 'asc';
+let visibleColumns = [
+    'deviceName', 'userPrincipalName', 'operatingSystem', 'osVersion',
+    'manufacturer', 'model', 'serialNumber', 'lastSyncDateTime',
+    'complianceState', 'totalStorageGB', 'freeStorageGB'
+];
+
+// Função para formatar data
+function formatDate(dateStr) {
+    if (dateStr === "N/A") return "N/A";
+    const date = new Date(dateStr);
+    return isNaN(date) ? "N/A" : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+// Função debounce
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -23,96 +38,75 @@ function debounce(func, wait) {
     };
 }
 
-function formatDate(dateStr) {
-    if (dateStr === 'N/A') return 'N/A';
-    const date = new Date(dateStr);
-    return date.toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+// Exibe/oculta loading com animação
+function showLoading(show) {
+    const loading = document.getElementById('loading');
+    loading.style.display = show ? 'flex' : 'none';
+    if (show) {
+        loading.classList.add('animate-pulse');
+        setTimeout(() => loading.classList.remove('animate-pulse'), 1000);
+    }
 }
 
-function populateSelectOptions(devices) {
-    const operatingSystemFilter = document.getElementById('operatingSystemFilter');
-    const manufacturerFilter = document.getElementById('manufacturerFilter');
-    const modelFilter = document.getElementById('modelFilter');
+// Popula dropdowns com valores únicos
+function populateDropdowns() {
+    const operatingSystems = [...new Set(devices.map(d => d.operatingSystem).filter(v => v !== "N/A"))].sort();
+    const manufacturers = [...new Set(devices.map(d => d.manufacturer).filter(v => v !== "N/A"))].sort();
+    const models = [...new Set(devices.map(d => d.model).filter(v => v !== "N/A"))].sort();
 
-    const operatingSystems = [...new Set(devices.map(d => d.operatingSystem).filter(os => os !== 'N/A'))].sort();
-    const manufacturers = [...new Set(devices.map(d => d.manufacturer).filter(m => m !== 'N/A'))].sort();
-    const models = [...new Set(devices.map(d => d.model).filter(m => m !== 'N/A'))].sort();
-
+    const osSelect = document.getElementById('operatingSystemFilter');
     operatingSystems.forEach(os => {
         const option = document.createElement('option');
         option.value = os;
         option.textContent = os;
-        operatingSystemFilter.appendChild(option);
+        osSelect.appendChild(option);
     });
 
-    manufacturers.forEach(m => {
+    const manufacturerSelect = document.getElementById('manufacturerFilter');
+    manufacturers.forEach(man => {
         const option = document.createElement('option');
-        option.value = m;
-        option.textContent = m;
-        manufacturerFilter.appendChild(option);
+        option.value = man;
+        option.textContent = man;
+        manufacturerSelect.appendChild(option);
     });
 
-    models.forEach(m => {
+    const modelSelect = document.getElementById('modelFilter');
+    models.forEach(model => {
         const option = document.createElement('option');
-        option.value = m;
-        option.textContent = m;
-        modelFilter.appendChild(option);
+        option.value = model;
+        option.textContent = model;
+        modelSelect.appendChild(option);
     });
 }
 
-function applyFilters() {
-    const deviceNameFilter = document.getElementById('deviceNameFilter').value.toLowerCase();
-    const userPrincipalNameFilter = document.getElementById('userPrincipalNameFilter').value.toLowerCase();
-    const operatingSystemFilter = document.getElementById('operatingSystemFilter').value;
-    const osVersionFilter = document.getElementById('osVersionFilter').value.toLowerCase();
-    const manufacturerFilter = document.getElementById('manufacturerFilter').value;
-    const modelFilter = document.getElementById('modelFilter').value;
-    const serialNumberFilter = document.getElementById('serialNumberFilter').value.toLowerCase();
-    const wifiMacAddressFilter = document.getElementById('wifiMacAddressFilter').value.toLowerCase();
-    const lastSyncDateStart = document.getElementById('lastSyncDateStart').value;
-    const lastSyncDateEnd = document.getElementById('lastSyncDateEnd').value;
-    const complianceStateFilter = document.getElementById('complianceStateFilter').value;
-    const totalStorageMin = parseFloat(document.getElementById('totalStorageMin').value) || -Infinity;
-    const totalStorageMax = parseFloat(document.getElementById('totalStorageMax').value) || Infinity;
-    const freeStorageMin = parseFloat(document.getElementById('freeStorageMin').value) || -Infinity;
-    const freeStorageMax = parseFloat(document.getElementById('freeStorageMax').value) || Infinity;
+// Carrega colunas visíveis do localStorage
+function loadVisibleColumns() {
+    const savedColumns = localStorage.getItem('visibleColumns');
+    if (savedColumns) {
+        visibleColumns = JSON.parse(savedColumns);
+    }
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        checkbox.checked = visibleColumns.includes(checkbox.dataset.column);
+    });
+    updateTableColumns();
+}
 
-    filteredDevices = devices.filter(device => {
-        const deviceNameMatch = !deviceNameFilter || device.deviceName.toLowerCase().includes(deviceNameFilter);
-        const userPrincipalNameMatch = !userPrincipalNameFilter || device.userPrincipalName.toLowerCase().includes(userPrincipalNameFilter);
-        const operatingSystemMatch = !operatingSystemFilter || device.operatingSystem === operatingSystemFilter;
-        const osVersionMatch = !osVersionFilter || device.osVersion.toLowerCase().includes(osVersionFilter);
-        const manufacturerMatch = !manufacturerFilter || device.manufacturer === manufacturerFilter;
-        const modelMatch = !modelFilter || device.model === modelFilter;
-        const serialNumberMatch = !serialNumberFilter || device.serialNumber.toLowerCase().includes(serialNumberFilter);
-        const wifiMacAddressMatch = !wifiMacAddressFilter || device.wifiMacAddress.toLowerCase().includes(wifiMacAddressFilter);
-        const complianceStateMatch = !complianceStateFilter || device.complianceState === complianceStateFilter;
-        const totalStorageMatch = device.totalStorageGB >= totalStorageMin && device.totalStorageGB <= totalStorageMax;
-        const freeStorageMatch = device.freeStorageGB >= freeStorageMin && device.freeStorageGB <= freeStorageMax;
-        let lastSyncDateMatch = true;
-        if (lastSyncDateStart || lastSyncDateEnd) {
-            const syncDate = device.lastSyncDateTime !== 'N/A' ? new Date(device.lastSyncDateTime) : null;
-            const startDate = lastSyncDateStart ? new Date(lastSyncDateStart) : null;
-            const endDate = lastSyncDateEnd ? new Date(lastSyncDateEnd) : null;
-            lastSyncDateMatch = syncDate &&
-                (!startDate || syncDate >= startDate) &&
-                (!endDate || syncDate <= endDate);
+// Salva colunas visíveis no localStorage
+function saveVisibleColumns() {
+    localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
+}
+
+// Atualiza visibilidade das colunas
+function updateTableColumns() {
+    document.querySelectorAll('th, td').forEach(cell => {
+        const column = cell.dataset.column;
+        if (column) {
+            cell.style.display = visibleColumns.includes(column) ? '' : 'none';
         }
-        return deviceNameMatch && userPrincipalNameMatch && operatingSystemMatch && osVersionMatch &&
-               manufacturerMatch && modelMatch && serialNumberMatch && wifiMacAddressMatch &&
-               complianceStateMatch && totalStorageMatch && freeStorageMatch;
     });
-
-    currentPage = 1;
-    renderPage();
 }
 
+// Renderiza página atual com animação
 function renderPage() {
     showLoading(true);
     setTimeout(() => {
@@ -126,17 +120,16 @@ function renderPage() {
                     <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}" onerror="this.src='${modelImages['default']}';">
                     <h2>${device.deviceName}</h2>
                     ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName}</p>` : ''}
-                    ${visible部分: visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>` : ''}
+                    ${visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>` : ''}
                     ${visibleColumns.includes('manufacturer') ? `<p><strong>Fabricante:</strong> ${device.manufacturer}</p>` : ''}
                     ${visibleColumns.includes('model') ? `<p><strong>Modelo:</strong> ${device.model}</p>` : ''}
                     ${visibleColumns.includes('serialNumber') ? `<p><strong>Número de Série:</strong> ${device.serialNumber}</p>` : ''}
-                    ${visibleColumns.includes('wifiMacAddress') ? `<p><strong>MAC WiFi:</strong> ${device.wifiMacAddress}</p>` : ''}
                     ${visibleColumns.includes('lastSyncDateTime') ? `<p><strong>Última Sinc.:</strong> ${formatDate(device.lastSyncDateTime)}</p>` : ''}
                     ${visibleColumns.includes('complianceState') ? `<p><strong>Conformidade:</strong> ${device.complianceState}</p>` : ''}
                     ${visibleColumns.includes('totalStorageGB') || visibleColumns.includes('freeStorageGB') ? `<p><strong>Armazenamento:</strong> ${device.totalStorageGB} GB (Livre: ${device.freeStorageGB} GB)</p>` : ''}
                 </div>
             `).join('');
-            document.getElementById('devicesGrid').innerHTML = gridHtml;
+            document.getElementById('gridContainer').innerHTML = gridHtml;
             document.getElementById('devicesTable').classList.add('hidden');
             document.getElementById('devicesGrid').classList.remove('hidden');
         } else {
@@ -149,7 +142,6 @@ function renderPage() {
                     <td data-column="manufacturer">${device.manufacturer}</td>
                     <td data-column="model">${device.model}</td>
                     <td data-column="serialNumber">${device.serialNumber}</td>
-                    <td data-column="wifiMacAddress">${device.wifiMacAddress}</td>
                     <td data-column="lastSyncDateTime">${formatDate(device.lastSyncDateTime)}</td>
                     <td data-column="complianceState">${device.complianceState}</td>
                     <td data-column="totalStorageGB">${device.totalStorageGB}</td>
@@ -171,162 +163,266 @@ function renderPage() {
     }, 100);
 }
 
-function updateTableColumns() {
-    const headers = document.querySelectorAll('#devicesTable th');
-    const cells = document.querySelectorAll('#devicesTable td');
-    headers.forEach(header => {
-        const column = header.getAttribute('data-column');
-        header.style.display = visibleColumns.includes(column) ? '' : 'none';
-    });
-    cells.forEach(cell => {
-        const column = cell.getAttribute('data-column');
-        cell.style.display = visibleColumns.includes(column) ? '' : 'none';
+// Atualiza indicadores de ordenação com ícones SVG
+function updateSortIndicators() {
+    document.querySelectorAll('th').forEach(th => {
+        const sortIcon = th.querySelector('.sort-icon');
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.column === sortKey) {
+            th.classList.add(`sort-${sortOrder}`);
+            sortIcon.style.transform = sortOrder === 'asc' ? 'rotate(0deg)' : 'rotate(180deg)';
+        } else {
+            sortIcon.style.transform = 'rotate(0deg)';
+        }
     });
 }
 
-function sortDevices(column) {
-    if (sortColumn === column) {
-        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+// Valida inputs numéricos
+function validateNumberInput(input) {
+    const value = input.value;
+    if (value && (isNaN(value) || value < 0)) {
+        input.classList.add('invalid');
     } else {
-        sortColumn = column;
-        sortDirection = 'asc';
+        input.classList.remove('invalid');
     }
+}
 
+// Aplica filtros
+function applyFilters() {
+    const deviceNameFilter = document.getElementById('deviceNameFilter').value.toLowerCase();
+    const userPrincipalNameFilter = document.getElementById('userPrincipalNameFilter').value.toLowerCase();
+    const operatingSystemFilter = document.getElementById('operatingSystemFilter').value;
+    const osVersionFilter = document.getElementById('osVersionFilter').value.toLowerCase();
+    const manufacturerFilter = document.getElementById('manufacturerFilter').value;
+    const modelFilter = document.getElementById('modelFilter').value;
+    const serialNumberFilter = document.getElementById('serialNumberFilter').value.toLowerCase();
+    const lastSyncDateStart = document.getElementById('lastSyncDateStart').value;
+    const lastSyncDateEnd = document.getElementById('lastSyncDateEnd').value;
+    const complianceStateFilter = document.getElementById('complianceStateFilter').value;
+    const totalStorageMin = parseFloat(document.getElementById('totalStorageMin').value) || -Infinity;
+    const totalStorageMax = parseFloat(document.getElementById('totalStorageMax').value) || Infinity;
+    const freeStorageMin = parseFloat(document.getElementById('freeStorageMin').value) || -Infinity;
+    const freeStorageMax = parseFloat(document.getElementById('freeStorageMax').value) || Infinity;
+
+    filteredDevices = devices.filter(device => {
+        const deviceNameMatch = !deviceNameFilter || device.deviceName.toLowerCase().includes(deviceNameFilter);
+        const userPrincipalNameMatch = !userPrincipalNameFilter || device.userPrincipalName.toLowerCase().includes(userPrincipalNameFilter);
+        const operatingSystemMatch = !operatingSystemFilter || device.operatingSystem === operatingSystemFilter;
+        const osVersionMatch = !osVersionFilter || device.osVersion.toLowerCase().includes(osVersionFilter);
+        const manufacturerMatch = !manufacturerFilter || device.manufacturer === manufacturerFilter;
+        const modelMatch = !modelFilter || device.model === modelFilter;
+        const serialNumberMatch = !serialNumberFilter || device.serialNumber.toLowerCase().includes(serialNumberFilter);
+        const complianceStateMatch = !complianceStateFilter || device.complianceState === complianceStateFilter;
+        const totalStorageMatch = device.totalStorageGB >= totalStorageMin && device.totalStorageGB <= totalStorageMax;
+        const freeStorageMatch = device.freeStorageGB >= freeStorageMin && device.freeStorageGB <= freeStorageMax;
+        let lastSyncDateMatch = true;
+        if (lastSyncDateStart || lastSyncDateEnd) {
+            const syncDate = device.lastSyncDateTime !== "N/A" ? new Date(device.lastSyncDateTime) : null;
+            const startDate = lastSyncDateStart ? new Date(lastSyncDateStart) : null;
+            const endDate = lastSyncDateEnd ? new Date(lastSyncDateEnd) : null;
+            lastSyncDateMatch = syncDate &&
+                (!startDate || syncDate >= startDate) &&
+                (!endDate || syncDate <= endDate);
+        }
+        return deviceNameMatch && userPrincipalNameMatch && operatingSystemMatch && osVersionMatch &&
+               manufacturerMatch && modelMatch && serialNumberMatch && lastSyncDateMatch &&
+               complianceStateMatch && totalStorageMatch && freeStorageMatch;
+    });
+
+    currentPage = 1;
+    renderPage();
+}
+
+// Ordena dispositivos
+function sortDevices(key) {
+    if (sortKey === key) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortKey = key;
+        sortOrder = 'asc';
+    }
+    document.getElementById('sortSelect').value = key;
     filteredDevices.sort((a, b) => {
-        let aValue = a[sortColumn];
-        let bValue = b[sortColumn];
-
-        if (sortColumn === 'lastSyncDateTime') {
-            aValue = aValue !== 'N/A' ? new Date(aValue) : null;
-            bValue = bValue !== 'N/A' ? new Date(bValue) : null;
-            if (!aValue) return 1;
-            if (!bValue) return -1;
-        } else if (['totalStorageGB', 'freeStorageGB'].includes(sortColumn)) {
+        let aValue = a[sortKey];
+        let bValue = b[sortKey];
+        if (sortKey === 'lastSyncDateTime' && aValue !== "N/A" && bValue !== "N/A") {
+            aValue = new Date(aValue);
+            bValue = new Date(bValue);
+        } else if (sortKey === 'totalStorageGB' || sortKey === 'freeStorageGB') {
             aValue = parseFloat(aValue);
             bValue = parseFloat(bValue);
         } else {
             aValue = aValue.toString().toLowerCase();
             bValue = bValue.toString().toLowerCase();
         }
-
-        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        if (aValue === "N/A" || bValue === "N/A") {
+            return aValue === bValue ? 0 : aValue === "N/A" ? 1 : -1;
+        }
+        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
         return 0;
     });
-
     renderPage();
 }
 
-function updateSortIndicators() {
-    const headers = document.querySelectorAll('#devicesTable th');
-    headers.forEach(header => {
-        const column = header.getAttribute('data-column');
-        const icon = header.querySelector('.sort-icon');
-        if (column === sortColumn) {
-            icon.style.transform = sortDirection === 'asc' ? 'rotate(0deg)' : 'rotate(180deg)';
-            icon.style.opacity = '1';
-        } else {
-            icon.style.transform = 'rotate(0deg)';
-            icon.style.opacity = '0.3';
-        }
-    });
+// Limpa filtros
+function clearFilters() {
+    document.getElementById('deviceNameFilter').value = '';
+    document.getElementById('userPrincipalNameFilter').value = '';
+    document.getElementById('operatingSystemFilter').value = '';
+    document.getElementById('osVersionFilter').value = '';
+    document.getElementById('manufacturerFilter').value = '';
+    document.getElementById('modelFilter').value = '';
+    document.getElementById('serialNumberFilter').value = '';
+    document.getElementById('lastSyncDateStart').value = '';
+    document.getElementById('lastSyncDateEnd').value = '';
+    document.getElementById('complianceStateFilter').value = '';
+    document.getElementById('totalStorageMin').value = '';
+    document.getElementById('totalStorageMax').value = '';
+    document.getElementById('freeStorageMin').value = '';
+    document.getElementById('freeStorageMax').value = '';
+    document.querySelectorAll('input').forEach(input => input.classList.remove('invalid'));
+    applyFilters();
 }
 
-function showLoading(show) {
-    const loading = document.getElementById('loading');
-    loading.classList.toggle('hidden', !show);
+// Aplica seleção de colunas
+function applyColumns() {
+    visibleColumns = Array.from(document.querySelectorAll('.column-toggle:checked')).map(cb => cb.dataset.column);
+    saveVisibleColumns();
+    renderPage();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    filteredDevices = devices;
-    populateSelectOptions(devices);
-
-    const debouncedApplyFilters = debounce(applyFilters, 300);
-    document.getElementById('deviceNameFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('userPrincipalNameFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('operatingSystemFilter').addEventListener('change', applyFilters);
-    document.getElementById('osVersionFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('manufacturerFilter').addEventListener('change', applyFilters);
-    document.getElementById('modelFilter').addEventListener('change', applyFilters);
-    document.getElementById('serialNumberFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('wifiMacAddressFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('lastSyncDateStart').addEventListener('change', applyFilters);
-    document.getElementById('lastSyncDateEnd').addEventListener('change', applyFilters);
-    document.getElementById('complianceStateFilter').addEventListener('change', applyFilters);
-    document.getElementById('totalStorageMin').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('totalStorageMax').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('freeStorageMin').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('freeStorageMax').addEventListener('input', debouncedApplyFilters);
-
-    document.getElementById('applyFilters').addEventListener('click', applyFilters);
-    document.getElementById('clearFilters').addEventListener('click', () => {
-        document.querySelectorAll('#filterPanel input, #folderPanel select').forEach(input => {
-            if (input.type === 'text' || input.type === 'number' || input.type === 'datetime-local') {
-                input.value = '';
-            } else if (input.tagName === 'SELECT') {
-                input.value = '';
+// Fecha dropdowns ao clicar fora
+function closeDropdowns(event) {
+    const dropdowns = document.querySelectorAll('.dropdown-content');
+    dropdowns.forEach(panel => {
+        const card = panel.closest('.control-card');
+        if (!card.contains(event.target)) {
+            panel.classList.add('hidden');
+            card.classList.remove('is-active');
+            const button = card.querySelector('.btn');
+            const arrow = button.querySelector('.arrow');
+            if (arrow) {
+                arrow.style.transform = 'rotate(0deg)';
             }
-        });
-        applyFilters();
-    });
-
-    document.getElementById('toggleFilters').addEventListener('click', () => {
-        const panel = document.getElementById('filterPanel');
-        const arrow = document.getElementById('toggleFilters').querySelector('.arrow');
-        panel.classList.toggle('hidden');
-        arrow.style.transform = panel.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-    });
-
-    document.getElementById('toggleColumns').addEventListener('click', () => {
-        const panel = document.getElementById('columnPanel');
-        const arrow = document.getElementById('toggleColumns').querySelector('.arrow');
-        panel.classList.toggle('hidden');
-        arrow.style.transform = panel.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-    });
-
-    document.getElementById('applyColumns').addEventListener('click', () => {
-        visibleColumns = Array.from(document.querySelectorAll('.column-toggle:checked')).map(cb => cb.getAttribute('data-column'));
-        document.getElementById('columnPanel').classList.add('hidden');
-        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
-        renderPage();
-    });
-
-    document.getElementById('sortSelect').addEventListener('change', (e) => {
-        sortDevices(e.target.value);
-    });
-
-    document.getElementById('toggleView').addEventListener('click', () => {
-        isGridView = !isGridView;
-        document.getElementById('toggleView').innerHTML = `
-            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="${isGridView ? 'M3 3h18v18H3z' : 'M12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}"></path>
-            </svg>
-            Ver como ${isGridView ? 'Tabela' : 'Grade'}
-        `;
-        renderPage();
-    });
-
-    document.querySelectorAll('#devicesTable th').forEach(header => {
-        header.addEventListener('click', () => {
-            const column = header.getAttribute('data-column');
-            sortDevices(column);
-        });
-    });
-
-    document.getElementById('prevPage').addEventListener('click', () => {
-        if (currentPage > 1) {
-            currentPage--;
-            renderPage();
+            button.classList.remove('active');
         }
     });
+}
 
-    document.getElementById('nextPage').addEventListener('click', () b=> {
-        const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
-        if (currentPage < totalPages) {
-            currentPage++;
-            renderPage();
-        }
-    });
-
+// Adiciona eventos
+const debouncedApplyFilters = debounce(applyFilters, 300);
+document.getElementById('applyFilters').addEventListener('click', applyFilters);
+document.getElementById('clearFilters').addEventListener('click', clearFilters);
+document.getElementById('deviceNameFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('userPrincipalNameFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('osVersionFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('serialNumberFilter').addEventListener('input', debouncedApplyFilters);
+document.getElementById('operatingSystemFilter').addEventListener('change', applyFilters);
+document.getElementById('manufacturerFilter').addEventListener('change', applyFilters);
+document.getElementById('modelFilter').addEventListener('change', applyFilters);
+document.getElementById('complianceStateFilter').addEventListener('change', applyFilters);
+document.getElementById('lastSyncDateStart').addEventListener('change', applyFilters);
+document.getElementById('lastSyncDateEnd').addEventListener('change', applyFilters);
+document.getElementById('totalStorageMin').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
+document.getElementById('totalStorageMax').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
+document.getElementById('freeStorageMin').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
+document.getElementById('freeStorageMax').addEventListener('input', (e) => {
+    validateNumberInput(e.target);
+    debouncedApplyFilters();
+});
+document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
+document.getElementById('toggleView').addEventListener('click', () => {
+    isGridView = !isGridView;
+    document.getElementById('toggleView').innerHTML = `
+        <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="${isGridView ? '12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6' : '12 2l5 5-5 5-5-5 5-5zM7 12l5 5 5-5'}" />
+        </svg>
+        Ver como ${isGridView ? 'Lista' : 'Grade'}
+    `;
     renderPage();
 });
+document.getElementById('prevPage').addEventListener('click', () => {
+    if (currentPage > 1) {
+        currentPage--;
+        renderPage();
+    }
+});
+document.getElementById('nextPage').addEventListener('click', () => {
+    const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderPage();
+    }
+});
+
+// Gerencia dropdowns de filtros
+document.getElementById('toggleFilters').addEventListener('click', (e) => {
+    e.preventDefault();
+    const panel = document.getElementById('filterPanel');
+    const button = e.currentTarget;
+    const card = button.closest('.control-card');
+    const otherPanel = document.getElementById('columnPanel');
+
+    // Fecha o outro dropdown
+    otherPanel.classList.add('hidden');
+    document.getElementById('toggleColumns').classList.remove('active');
+    document.getElementById('toggleColumns').closest('.control-card').classList.remove('is-active');
+    document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
+
+    // Alterna o dropdown atual
+    panel.classList.toggle('hidden');
+    const isHidden = panel.classList.contains('hidden');
+    button.classList.toggle('active', !isHidden);
+    card.classList.toggle('is-active', !isHidden);
+    button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+});
+
+// Gerencia dropdowns de colunas
+document.getElementById('toggleColumns').addEventListener('click', (e) => {
+    e.preventDefault();
+    const panel = document.getElementById('columnPanel');
+    const button = e.currentTarget;
+    const card = button.closest('.control-card');
+    const otherPanel = document.getElementById('filterPanel');
+
+    // Fecha o outro dropdown
+    otherPanel.classList.add('hidden');
+    document.getElementById('toggleFilters').classList.remove('active');
+    document.getElementById('toggleFilters').closest('.control-card').classList.remove('is-active');
+    document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
+
+    // Alterna o dropdown atual
+    panel.classList.toggle('hidden');
+    const isHidden = panel.classList.contains('hidden');
+    button.classList.toggle('active', !isHidden);
+    card.classList.toggle('is-active', !isHidden);
+    button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+});
+
+document.getElementById('applyColumns').addEventListener('click', applyColumns);
+document.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+        const column = th.dataset.column;
+        if (column) sortDevices(column);
+    });
+});
+
+document.addEventListener('click', closeDropdowns);
+
+// Inicialização
+window.onload = () => {
+    populateDropdowns();
+    loadVisibleColumns();
+    renderPage();
+    document.querySelectorAll('.animate-fade').forEach(el => el.classList.add('visible'));
+};
