@@ -97,6 +97,7 @@ body {
     gap: 1.5rem;
     justify-items: center;
     margin-bottom: 2rem;
+    position: relative;
 }
 
 .control-card {
@@ -128,6 +129,8 @@ body {
     width: 100%;
     justify-content: center;
     font-size: 1rem;
+    position: relative;
+    z-index: 1;
 }
 
 .btn:hover:not(:disabled) {
@@ -186,28 +189,29 @@ body {
     opacity: 0;
     transform: translateY(-10px);
     transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    pointer-events: auto; /* Garante que o dropdown receba eventos */
 }
 
 .dropdown-content:not(.hidden) {
     opacity: 1;
     transform: translateY(0);
+    pointer-events: auto; /* Ativa eventos enquanto visível */
 }
 
-.filter-panel {
+.dropdown-content.hidden {
+    pointer-events: none; /* Desativa eventos quando oculto */
+}
+
+.filter-panel, .column-panel {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
 }
 
-.column-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
 .filter-group {
     display: flex;
     flex-direction: column;
+    gap: 1rem;
 }
 
 .filter-group label {
@@ -555,4 +559,18 @@ tr:hover td {
         font-size: 0.85rem;
         padding: 0.5rem;
     }
+}
+
+/* Adição para bloquear interação abaixo do dropdown */
+.controls .btn {
+    pointer-events: auto;
+}
+
+.controls .dropdown-content:not(.hidden) ~ .btn {
+    pointer-events: none; /* Desativa interação com botões abaixo do dropdown visível */
+    opacity: 0.5; /* Opcional: reduz visibilidade para indicar desativação */
+}
+
+.controls .dropdown-content:not(.hidden) {
+    z-index: 1002; /* Garante que o dropdown fique acima de outros elementos */
 }
