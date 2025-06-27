@@ -351,6 +351,7 @@ th {
     color: var(--text-muted);
     padding: 0.75rem 1.5rem;
     text-align: left;
+    text-wrap: nowrap;
     position: sticky;
     top: 0;
     z-index: 1;
