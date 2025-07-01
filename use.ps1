@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-    Generates an HTML report for Intune-managed devices synchronized within a specified period.
+    Generates an HTML report for Intune-managed devices with advanced chart customization.
 
 .DESCRIPTION
-    This script connects to Microsoft Graph, retrieves device data, and generates an HTML report
-    with filtering, sorting, and chart visualization capabilities. It also logs unique device models.
+    This script connects to Microsoft Graph, retrieves device data for devices synced within a specified period,
+    and generates an HTML report with filtering, sorting, and advanced chart visualization capabilities.
+    Charts support customizable X/Y axes, data exclusion, and multiple aggregation methods.
 
 .PARAMETER ActiveDeviceSyncDays
     Number of days to filter devices based on their last sync date. Default is 90 days.
@@ -170,17 +171,36 @@ $htmlContent = @"
                         <option value="bar">Barra</option>
                         <option value="pie">Pizza</option>
                         <option value="doughnut">Rosca</option>
+                        <option value="line">Linha</option>
+                        <option value="scatter">Dispersão</option>
                     </select>
                 </div>
                 <div class="chart-control-group">
-                    <label for="chartDataField">Campo de Dados</label>
-                    <select id="chartDataField">
-                        <option value="operatingSystem">Sistema Operacional</option>
-                        <option value="complianceState">Conformidade</option>
-                        <option value="model">Modelo</option>
-                        <option value="manufacturer">Fabricante</option>
-                        <option value="totalStorageGB">Armazenamento Total (GB)</option>
-                        <option value="freeStorageGB">Armazenamento Livre (GB)</option>
+                    <label for="chartXField">Eixo X</label>
+                    <select id="chartXField">
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                <div class="chart-control-group">
+                    <label for="chartYField">Eixo Y</label>
+                    <select id="chartYField">
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                <div class="chart-control-group">
+                    <label for="chartAggregation">Agregação</label>
+                    <select id="chartAggregation">
+                        <option value="count">Contagem</option>
+                        <option value="sum">Soma</option>
+                        <option value="avg">Média</option>
+                        <option value="min">Mínimo</option>
+                        <option value="max">Máximo</option>
+                    </select>
+                </div>
+                <div class="chart-control-group">
+                    <label for="chartExcludeValues">Excluir Valores (Eixo X)</label>
+                    <select id="chartExcludeValues" multiple>
+                        <option value="">Nenhum</option>
                     </select>
                 </div>
                 <div class="chart-control-group">
@@ -190,6 +210,9 @@ $htmlContent = @"
                 <div class="chart-control-group">
                     <label for="chartTitle">Título do Gráfico</label>
                     <input type="text" id="chartTitle" placeholder="Digite o título do gráfico">
+                </div>
+                <div class="chart-control-group">
+                    <span id="chartError" class="error-message"></span>
                 </div>
                 <button class="btn-primary" id="addChart">Adicionar Gráfico</button>
             </div>
