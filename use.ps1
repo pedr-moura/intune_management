@@ -138,7 +138,7 @@ $htmlContent = @"
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Intune Report Manager</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://intune-management.vercel.app/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -445,7 +445,7 @@ $htmlContent = @"
     <script>
         window.devices = $devicesJson;
     </script>
-    <script src="script.js"></script>
+    <script src="https://intune-management.vercel.app/script.js"></script>
 </body>
 </html>
 "@
