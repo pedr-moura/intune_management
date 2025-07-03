@@ -1,40 +1,17 @@
 (function () {
-    // Verifica se window.devices está definido
-    if (!window.devices) {
-        console.error('Erro: A variável window.devices não está definida.');
-        document.getElementById('loading').innerHTML = 'Erro ao carregar os dados dos dispositivos. Verifique o arquivo gerado.';
+    // Check dependencies
+    if (!window.Chart) {
+        console.error('Erro: Chart.js não carregado.');
+        document.getElementById('loading').innerHTML = 'Erro: Chart.js não carregado.';
+        return;
+    }
+    if (!window.devices || !Array.isArray(window.devices)) {
+        console.error('Erro: Dados dos dispositivos inválidos.');
+        document.getElementById('loading').innerHTML = 'Erro ao carregar dados.';
         return;
     }
 
-    // Efeitos de iluminação
-    const particleContainer = document.getElementById('particle-container');
-    document.addEventListener('mousemove', (e) => {
-        // Partículas
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-        const size = Math.random() * 8 + 4;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        particle.style.left = `${e.clientX}px`;
-        particle.style.top = `${e.clientY}px`;
-        particle.style.opacity = Math.random() * 0.5 + 0.3;
-        particleContainer.appendChild(particle);
-        setTimeout(() => particle.remove(), 1000);
-
-        // Aura
-        const aura = document.getElementById('cursor-aura');
-        aura.style.left = `${e.clientX}px`;
-        aura.style.top = `${e.clientY}px`;
-    });
-
-    const modelImages = {
-        "Surface Pro 7": "https://placehold.co/150?text=Surface+Pro+7",
-        "Surface Laptop 4": "https://placehold.co/150?text=Surface+Laptop+4",
-        "iPhone 12": "https://placehold.co/150?text=iPhone+12",
-        "Latitude 3400": "https://placehold.co/150?text=Latitude+3400",
-        "default": "https://i.ibb.co/RT1GY4pt/microsoft-intune-logo-brandlogos-net-6p2c7-512x512.png"
-    };
-
+    // State
     let currentPage = 1;
     const rowsPerPage = 100;
     let isGridView = false;
@@ -46,240 +23,395 @@
         'manufacturer', 'model', 'serialNumber', 'lastSyncDateTime',
         'complianceState', 'totalStorageGB', 'freeStorageGB'
     ];
+    let charts = [];
 
-    // Função para formatar data
-    function formatDate(dateStr) {
-        if (dateStr === "N/A") return "N/A";
-        const date = new Date(dateStr);
-        return isNaN(date) ? "N/A" : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    // Device model images
+    const modelImages = {
+        "Surface Pro 7": "https://placehold.co/150?text=Surface+Pro+7",
+        "Latitude 3400": "https://placehold.co/150?text=Latitude+3400",
+        "iPhone 12": "https://placehold.co/150?text=iPhone+12",
+        "Galaxy S21": "https://placehold.co/150?text=Galaxy+S21",
+        "EliteBook 840": "https://placehold.co/150?text=EliteBook+840",
+        "default": "https://placehold.co/150?text=Device"
+    };
+
+    // Available fields for charting
+    const chartFields = [
+        { value: 'operatingSystem', label: 'Sistema Operacional', isNumeric: false },
+        { value: 'complianceState', label: 'Conformidade', isNumeric: false },
+        { value: 'model', label: 'Modelo', isNumeric: false },
+        { value: 'manufacturer', label: 'Fabricante', isNumeric: false },
+        { value: 'totalStorageGB', label: 'Armazenamento Total (GB)', isNumeric: true },
+        { value: 'freeStorageGB', label: 'Armazenamento Livre (GB)', isNumeric: true }
+    ];
+
+    // Chart Management
+    function createChart(config) {
+        const chartId = `chart-${Date.now()}-${charts.length}`;
+        const chartsContainer = document.getElementById('chartsContainer');
+        if (!chartsContainer) {
+            console.error('Erro: chartsContainer não encontrado.');
+            return;
+        }
+
+        const chartCard = document.createElement('div');
+        chartCard.className = 'chart-card animate-fade-in';
+        chartCard.innerHTML = `
+            <h3>${config.title || `${config.yField} por ${config.xField}`}</h3>
+            <canvas id="${chartId}"></canvas>
+            <button class="remove-chart-btn" data-chart-id="${chartId}">Remover</button>
+        `;
+        chartsContainer.appendChild(chartCard);
+
+        const canvas = document.getElementById(chartId);
+        if (!canvas) {
+            console.error(`Erro: Canvas ${chartId} não encontrado.`);
+            chartCard.remove();
+            return;
+        }
+
+        try {
+            const data = aggregateChartData(config);
+            const isNumericY = chartFields.find(f => f.value === config.yField)?.isNumeric;
+            const chart = new Chart(canvas, {
+                type: config.type,
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: config.title || `${config.yField} por ${config.xField}`,
+                        data: data.values,
+                        backgroundColor: config.type === 'bar' || config.type === 'line' ? config.color : [
+                            config.color, '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#eab308'
+                        ],
+                        borderColor: config.type === 'line' ? config.color : 'var(--card-bg)',
+                        borderWidth: config.type === 'line' ? 2 : 1,
+                        fill: config.type === 'line' && config.aggregation !== 'count'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'var(--text-color)', font: { size: 12 } } },
+                        title: { display: false }
+                    },
+                    scales: {
+                        x: { ticks: { color: 'var(--text-color)' } },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: 'var(--text-color)', stepSize: isNumericY ? undefined : 1 }
+                        }
+                    }
+                }
+            });
+
+            charts.push({ id: chartId, chart, config });
+            document.querySelector(`[data-chart-id="${chartId}"]`).addEventListener('click', () => {
+                charts = charts.filter(c => c.id !== chartId);
+                chart.destroy();
+                chartCard.remove();
+            });
+        } catch (e) {
+            console.error(`Erro ao criar gráfico ${chartId}: ${e.message}`);
+            chartCard.remove();
+        }
     }
 
-    // Função debounce
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
+    function aggregateChartData(config) {
+        const { xField, yField, aggregation, excludeValues = [] } = config;
+        const isNumericX = chartFields.find(f => f.value === xField)?.isNumeric;
+        const isNumericY = chartFields.find(f => f.value === yField)?.isNumeric;
+
+        // Filter out excluded values
+        let data = filteredDevices.filter(device => !excludeValues.includes(device[xField]?.toString()));
+
+        // Group by xField
+        const grouped = data.reduce((acc, device) => {
+            const xValue = device[xField] || 'N/A';
+            if (isNumericX) {
+                const bin = Math.floor(parseFloat(xValue) / 50) * 50;
+                acc[bin] = acc[bin] || { count: 0, values: [] };
+                acc[bin].count++;
+                acc[bin].values.push(parseFloat(device[yField]) || 0);
+            } else {
+                acc[xValue] = acc[xValue] || { count: 0, values: [] };
+                acc[xValue].count++;
+                acc[xValue].values.push(parseFloat(device[yField]) || 0);
+            }
+            return acc;
+        }, {});
+
+        // Aggregate y values
+        const labels = Object.keys(grouped).sort((a, b) => isNumericX ? parseFloat(a) - parseFloat(b) : a.localeCompare(b));
+        const values = labels.map(label => {
+            const group = grouped[label];
+            if (aggregation === 'count' || !isNumericY) return group.count;
+            if (aggregation === 'sum') return group.values.reduce((sum, val) => sum + val, 0);
+            if (aggregation === 'avg') return group.values.reduce((sum, val) => sum + val, 0) / group.values.length;
+            if (aggregation === 'min') return Math.min(...group.values);
+            if (aggregation === 'max') return Math.max(...group.values);
+            return 0;
+        });
+
+        return {
+            labels: isNumericX ? labels.map(l => `${l}-${parseInt(l)+50} GB`) : labels,
+            values
         };
     }
 
-    // Exibe/oculta loading com animação
+    function updateCharts() {
+        charts.forEach(({ chart, config }) => {
+            const data = aggregateChartData(config);
+            chart.data.labels = data.labels;
+            chart.data.datasets[0].data = data.values;
+            chart.update();
+        });
+    }
+
+    // Update exclusion filter dropdown
+    function updateExcludeFilter() {
+        const xField = document.getElementById('chartXField')?.value;
+        const excludeSelect = document.getElementById('chartExcludeValues');
+        if (!xField || !excludeSelect) return;
+
+        excludeSelect.innerHTML = '<option value="">Nenhum</option>';
+        const values = [...new Set(filteredDevices.map(d => d[xField]).filter(v => v && v !== "N/A"))].sort();
+        values.forEach(value => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            excludeSelect.appendChild(option);
+        });
+    }
+
+    // Particle Effects
+    function initializeParticleEffects() {
+        const particleContainer = document.getElementById('particle-container');
+        const aura = document.getElementById('cursor-aura');
+        if (!particleContainer || !aura) return;
+
+        document.addEventListener('mousemove', (e) => {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = `${e.clientX}px`;
+            particle.style.top = `${e.clientY}px`;
+            particleContainer.appendChild(particle);
+            setTimeout(() => particle.remove(), 1000);
+            aura.style.left = `${e.clientX}px`;
+            aura.style.top = `${e.clientY}px`;
+        });
+    }
+
+    // Utilities
+    function formatDate(dateStr) {
+        if (!dateStr || dateStr === "N/A") return "N/A";
+        try {
+            const date = new Date(dateStr);
+            return isNaN(date) ? "N/A" : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+        } catch {
+            return "N/A";
+        }
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func(...args), wait);
+        };
+    }
+
     function showLoading(show) {
         const loading = document.getElementById('loading');
-        loading.style.display = show ? 'flex' : 'none';
-        if (show) {
-            loading.classList.add('animate-pulse');
-            setTimeout(() => loading.classList.remove('animate-pulse'), 1000);
+        if (loading) {
+            loading.style.display = show ? 'flex' : 'none';
+            if (show) loading.classList.add('animate-pulse');
+            else loading.classList.remove('animate-pulse');
         }
     }
 
-    // Popula dropdowns com valores únicos
+    // Populate Dropdowns
     function populateDropdowns() {
-        const operatingSystems = [...new Set(window.devices.map(d => d.operatingSystem).filter(v => v !== "N/A"))].sort();
-        const manufacturers = [...new Set(window.devices.map(d => d.manufacturer).filter(v => v !== "N/A"))].sort();
-        const models = [...new Set(window.devices.map(d => d.model).filter(v => v !== "N/A"))].sort();
-
-        const osSelect = document.getElementById('operatingSystemFilter');
-        operatingSystems.forEach(os => {
-            const option = document.createElement('option');
-            option.value = os;
-            option.textContent = os;
-            osSelect.appendChild(option);
+        const fields = ['operatingSystem', 'manufacturer', 'model'];
+        fields.forEach(field => {
+            const select = document.getElementById(`${field}Filter`);
+            if (!select) return;
+            const values = [...new Set(window.devices.map(d => d[field]).filter(v => v && v !== "N/A"))].sort();
+            values.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                select.appendChild(option);
+            });
         });
 
-        const manufacturerSelect = document.getElementById('manufacturerFilter');
-        manufacturers.forEach(man => {
-            const option = document.createElement('option');
-            option.value = man;
-            option.textContent = man;
-            manufacturerSelect.appendChild(option);
-        });
+        // Populate chart axis selectors
+        const xFieldSelect = document.getElementById('chartXField');
+        const yFieldSelect = document.getElementById('chartYField');
+        if (xFieldSelect && yFieldSelect) {
+            chartFields.forEach(field => {
+                const xOption = document.createElement('option');
+                xOption.value = field.value;
+                xOption.textContent = field.label;
+                xFieldSelect.appendChild(xOption);
 
-        const modelSelect = document.getElementById('modelFilter');
-        models.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model;
-            option.textContent = model;
-            modelSelect.appendChild(option);
-        });
-    }
-
-    // Carrega colunas visíveis do localStorage
-    function loadVisibleColumns() {
-        const savedColumns = localStorage.getItem('visibleColumns');
-        if (savedColumns) {
-            visibleColumns = JSON.parse(savedColumns);
+                const yOption = document.createElement('option');
+                yOption.value = field.value;
+                yOption.textContent = field.label + (field.isNumeric ? '' : ' (Contagem)');
+                yFieldSelect.appendChild(yOption);
+            });
         }
-        document.querySelectorAll('.column-toggle').forEach(checkbox => {
-            checkbox.checked = visibleColumns.includes(checkbox.dataset.column);
-        });
-        updateTableColumns();
     }
 
-    // Salva colunas visíveis no localStorage
-    function saveVisibleColumns() {
-        localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
-    }
-
-    // Atualiza visibilidade das colunas
-    function updateTableColumns() {
-        document.querySelectorAll('th, td').forEach(cell => {
-            const column = cell.dataset.column;
-            if (column) {
-                cell.style.display = visibleColumns.includes(column) ? '' : 'none';
-            }
-        });
-    }
-
-    // Renderiza página atual com animação
+    // Render Page
     function renderPage() {
         showLoading(true);
         setTimeout(() => {
+            const devicesGrid = document.getElementById('devicesGrid');
+            const tableBody = document.getElementById('tableBody');
+            const devicesTable = document.getElementById('devicesTable');
+            if (!devicesGrid || !tableBody || !devicesTable) {
+                console.error('Erro: Elementos de renderização não encontrados.');
+                showLoading(false);
+                return;
+            }
+
             const start = (currentPage - 1) * rowsPerPage;
             const end = start + rowsPerPage;
             const pageDevices = filteredDevices.slice(start, end);
 
             if (isGridView) {
-                const gridHtml = pageDevices.map(device => `
-                    <div class="device-card animate-fade-in" title="Clique para detalhes">
-                        <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model}" onerror="this.src='${modelImages['default']}';">
-                        <h2>${device.deviceName}</h2>
-                        ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName}</p>` : ''}
-                        ${visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem} ${device.osVersion}</p>` : ''}
-                        ${visibleColumns.includes('manufacturer') ? `<p><strong>Fabricante:</strong> ${device.manufacturer}</p>` : ''}
-                        ${visibleColumns.includes('model') ? `<p><strong>Modelo:</strong> ${device.model}</p>` : ''}
-                        ${visibleColumns.includes('serialNumber') ? `<p><strong>Número de Série:</strong> ${device.serialNumber}</p>` : ''}
+                devicesGrid.innerHTML = pageDevices.map(device => `
+                    <div class="device-card animate-fade-in">
+                        <img class="device-image" src="${modelImages[device.model] || modelImages['default']}" alt="${device.model || 'Device'}">
+                        <h2>${device.deviceName || 'N/A'}</h2>
+                        ${visibleColumns.includes('userPrincipalName') ? `<p><strong>Usuário:</strong> ${device.userPrincipalName || 'N/A'}</p>` : ''}
+                        ${visibleColumns.includes('operatingSystem') ? `<p><strong>SO:</strong> ${device.operatingSystem || 'N/A'} ${device.osVersion || ''}</p>` : ''}
+                        ${visibleColumns.includes('manufacturer') ? `<p><strong>Fabricante:</strong> ${device.manufacturer || 'N/A'}</p>` : ''}
+                        ${visibleColumns.includes('model') ? `<p><strong>Modelo:</strong> ${device.model || 'N/A'}</p>` : ''}
+                        ${visibleColumns.includes('serialNumber') ? `<p><strong>Número de Série:</strong> ${device.serialNumber || 'N/A'}</p>` : ''}
                         ${visibleColumns.includes('lastSyncDateTime') ? `<p><strong>Última Sinc.:</strong> ${formatDate(device.lastSyncDateTime)}</p>` : ''}
-                        ${visibleColumns.includes('complianceState') ? `<p><strong>Conformidade:</strong> ${device.complianceState}</p>` : ''}
-                        ${visibleColumns.includes('totalStorageGB') || visibleColumns.includes('freeStorageGB') ? `<p><strong>Armazenamento:</strong> ${device.totalStorageGB} GB (Livre: ${device.freeStorageGB} GB)</p>` : ''}
+                        ${visibleColumns.includes('complianceState') ? `<p><strong>Conformidade:</strong> ${device.complianceState || 'N/A'}</p>` : ''}
+                        ${visibleColumns.includes('totalStorageGB') || visibleColumns.includes('freeStorageGB') ? `<p><strong>Armazenamento:</strong> ${device.totalStorageGB || 0} GB (Livre: ${device.freeStorageGB || 0} GB)</p>` : ''}
                     </div>
                 `).join('');
-                document.getElementById('gridContainer').innerHTML = gridHtml;
-                document.getElementById('devicesTable').classList.add('hidden');
-                document.getElementById('devicesGrid').classList.remove('hidden');
+                devicesTable.classList.add('hidden');
+                devicesGrid.classList.remove('hidden');
             } else {
-                const tableHtml = pageDevices.map(device => `
-                    <tr class="animate-fade-in" title="Detalhes do dispositivo">
-                        <td data-column="deviceName">${device.deviceName}</td>
-                        <td data-column="userPrincipalName">${device.userPrincipalName}</td>
-                        <td data-column="operatingSystem">${device.operatingSystem}</td>
-                        <td data-column="osVersion">${device.osVersion}</td>
-                        <td data-column="manufacturer">${device.manufacturer}</td>
-                        <td data-column="model">${device.model}</td>
-                        <td data-column="serialNumber">${device.serialNumber}</td>
-                        <td data-column="lastSyncDateTime">${formatDate(device.lastSyncDateTime)}</td>
-                        <td data-column="complianceState">${device.complianceState}</td>
-                        <td data-column="totalStorageGB">${device.totalStorageGB}</td>
-                        <td data-column="freeStorageGB">${device.freeStorageGB}</td>
+                tableBody.innerHTML = pageDevices.map(device => `
+                    <tr class="animate-fade-in">
+                        ${visibleColumns.includes('deviceName') ? `<td data-column="deviceName">${device.deviceName || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('userPrincipalName') ? `<td data-column="userPrincipalName">${device.userPrincipalName || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('operatingSystem') ? `<td data-column="operatingSystem">${device.operatingSystem || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('osVersion') ? `<td data-column="osVersion">${device.osVersion || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('manufacturer') ? `<td data-column="manufacturer">${device.manufacturer || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('model') ? `<td data-column="model">${device.model || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('serialNumber') ? `<td data-column="serialNumber">${device.serialNumber || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('lastSyncDateTime') ? `<td data-column="lastSyncDateTime">${formatDate(device.lastSyncDateTime)}</td>` : ''}
+                        ${visibleColumns.includes('complianceState') ? `<td data-column="complianceState">${device.complianceState || 'N/A'}</td>` : ''}
+                        ${visibleColumns.includes('totalStorageGB') ? `<td data-column="totalStorageGB">${device.totalStorageGB || 0}</td>` : ''}
+                        ${visibleColumns.includes('freeStorageGB') ? `<td data-column="freeStorageGB">${device.freeStorageGB || 0}</td>` : ''}
                     </tr>
                 `).join('');
-                document.getElementById('tableBody').innerHTML = tableHtml;
-                document.getElementById('devicesGrid').classList.add('hidden');
-                document.getElementById('devicesTable').classList.remove('hidden');
-                updateTableColumns();
+                devicesGrid.classList.add('hidden');
+                devicesTable.classList.remove('hidden');
             }
 
             const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
-            document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages} (${filteredDevices.length} dispositivos)`;
-            document.getElementById('prevPage').disabled = currentPage === 1;
-            document.getElementById('nextPage').disabled = currentPage === totalPages;
+            const pageInfo = document.getElementById('pageInfo');
+            if (pageInfo) pageInfo.textContent = `Página ${currentPage} de ${totalPages} (${filteredDevices.length} dispositivos)`;
+            const prevPage = document.getElementById('prevPage');
+            const nextPage = document.getElementById('nextPage');
+            if (prevPage && nextPage) {
+                prevPage.disabled = currentPage === 1;
+                nextPage.disabled = currentPage === totalPages;
+            }
             updateSortIndicators();
+            updateCharts();
             showLoading(false);
         }, 100);
     }
 
-    // Atualiza indicadores de ordenação com ícones SVG
     function updateSortIndicators() {
         document.querySelectorAll('th').forEach(th => {
             const sortIcon = th.querySelector('.sort-icon');
-            th.classList.remove('sort-asc', 'sort-desc');
-            if (th.dataset.column === sortKey) {
-                th.classList.add(`sort-${sortOrder}`);
+            if (sortIcon && th.dataset.column === sortKey) {
                 sortIcon.style.transform = sortOrder === 'asc' ? 'rotate(0deg)' : 'rotate(180deg)';
-            } else {
+            } else if (sortIcon) {
                 sortIcon.style.transform = 'rotate(0deg)';
             }
         });
     }
 
-    // Valida inputs numéricos
     function validateNumberInput(input) {
         const value = input.value;
         if (value && (isNaN(value) || value < 0)) {
             input.classList.add('invalid');
-        } else {
-            input.classList.remove('invalid');
+            return false;
         }
+        input.classList.remove('invalid');
+        return true;
     }
 
-    // Aplica filtros
     function applyFilters() {
-        const deviceNameFilter = document.getElementById('deviceNameFilter').value.toLowerCase();
-        const userPrincipalNameFilter = document.getElementById('userPrincipalNameFilter').value.toLowerCase();
-        const operatingSystemFilter = document.getElementById('operatingSystemFilter').value;
-        const osVersionFilter = document.getElementById('osVersionFilter').value.toLowerCase();
-        const manufacturerFilter = document.getElementById('manufacturerFilter').value;
-        const modelFilter = document.getElementById('modelFilter').value;
-        const serialNumberFilter = document.getElementById('serialNumberFilter').value.toLowerCase();
-        const lastSyncDateStart = document.getElementById('lastSyncDateStart').value;
-        const lastSyncDateEnd = document.getElementById('lastSyncDateEnd').value;
-        const complianceStateFilter = document.getElementById('complianceStateFilter').value;
-        const totalStorageMin = parseFloat(document.getElementById('totalStorageMin').value) || -Infinity;
-        const totalStorageMax = parseFloat(document.getElementById('totalStorageMax').value) || Infinity;
-        const freeStorageMin = parseFloat(document.getElementById('freeStorageMin').value) || -Infinity;
-        const freeStorageMax = parseFloat(document.getElementById('freeStorageMax').value) || Infinity;
+        const filters = {
+            deviceName: document.getElementById('deviceNameFilter')?.value.toLowerCase() || '',
+            userPrincipalName: document.getElementById('userPrincipalNameFilter')?.value.toLowerCase() || '',
+            operatingSystem: document.getElementById('operatingSystemFilter')?.value || '',
+            osVersion: document.getElementById('osVersionFilter')?.value.toLowerCase() || '',
+            manufacturer: document.getElementById('manufacturerFilter')?.value || '',
+            model: document.getElementById('modelFilter')?.value || '',
+            serialNumber: document.getElementById('serialNumberFilter')?.value.toLowerCase() || '',
+            lastSyncDateStart: document.getElementById('lastSyncDateStart')?.value || '',
+            lastSyncDateEnd: document.getElementById('lastSyncDateEnd')?.value || '',
+            complianceState: document.getElementById('complianceStateFilter')?.value || '',
+            totalStorageMin: parseFloat(document.getElementById('totalStorageMin')?.value) || -Infinity,
+            totalStorageMax: parseFloat(document.getElementById('totalStorageMax')?.value) || Infinity,
+            freeStorageMin: parseFloat(document.getElementById('freeStorageMin')?.value) || -Infinity,
+            freeStorageMax: parseFloat(document.getElementById('freeStorageMax')?.value) || Infinity
+        };
 
         filteredDevices = window.devices.filter(device => {
-            const deviceNameMatch = !deviceNameFilter || device.deviceName.toLowerCase().includes(deviceNameFilter);
-            const userPrincipalNameMatch = !userPrincipalNameFilter || device.userPrincipalName.toLowerCase().includes(userPrincipalNameFilter);
-            const operatingSystemMatch = !operatingSystemFilter || device.operatingSystem === operatingSystemFilter;
-            const osVersionMatch = !osVersionFilter || device.osVersion.toLowerCase().includes(osVersionFilter);
-            const manufacturerMatch = !manufacturerFilter || device.manufacturer === manufacturerFilter;
-            const modelMatch = !modelFilter || device.model === modelFilter;
-            const serialNumberMatch = !serialNumberFilter || device.serialNumber.toLowerCase().includes(serialNumberFilter);
-            const complianceStateMatch = !complianceStateFilter || device.complianceState === complianceStateFilter;
-            const totalStorageMatch = device.totalStorageGB >= totalStorageMin && device.totalStorageGB <= totalStorageMax;
-            const freeStorageMatch = device.freeStorageGB >= freeStorageMin && device.freeStorageGB <= freeStorageMax;
-            let lastSyncDateMatch = true;
-            if (lastSyncDateStart || lastSyncDateEnd) {
-                const syncDate = device.lastSyncDateTime !== "N/A" ? new Date(device.lastSyncDateTime) : null;
-                const startDate = lastSyncDateStart ? new Date(lastSyncDateStart) : null;
-                const endDate = lastSyncDateEnd ? new Date(lastSyncDateEnd) : null;
-                lastSyncDateMatch = syncDate &&
-                    (!startDate || syncDate >= startDate) &&
-                    (!endDate || syncDate <= endDate);
-            }
-            return deviceNameMatch && userPrincipalNameMatch && operatingSystemMatch && osVersionMatch &&
-                   manufacturerMatch && modelMatch && serialNumberMatch && lastSyncDateMatch &&
-                   complianceStateMatch && totalStorageMatch && freeStorageMatch;
+            return (
+                (!filters.deviceName || (device.deviceName || '').toLowerCase().includes(filters.deviceName)) &&
+                (!filters.userPrincipalName || (device.userPrincipalName || '').toLowerCase().includes(filters.userPrincipalName)) &&
+                (!filters.operatingSystem || (device.operatingSystem || '') === filters.operatingSystem) &&
+                (!filters.osVersion || (device.osVersion || '').toLowerCase().includes(filters.osVersion)) &&
+                (!filters.manufacturer || (device.manufacturer || '') === filters.manufacturer) &&
+                (!filters.model || (device.model || '') === filters.model) &&
+                (!filters.serialNumber || (device.serialNumber || '').toLowerCase().includes(filters.serialNumber)) &&
+                (!filters.complianceState || (device.complianceState || '') === filters.complianceState) &&
+                ((device.totalStorageGB || 0) >= filters.totalStorageMin && (device.totalStorageGB || 0) <= filters.totalStorageMax) &&
+                ((device.freeStorageGB || 0) >= filters.freeStorageMin && (device.freeStorageGB || 0) <= filters.freeStorageMax) &&
+                (filters.lastSyncDateStart || filters.lastSyncDateEnd ? (
+                    device.lastSyncDateTime !== "N/A" &&
+                    (!filters.lastSyncDateStart || new Date(device.lastSyncDateTime) >= new Date(filters.lastSyncDateStart)) &&
+                    (!filters.lastSyncDateEnd || new Date(device.lastSyncDateTime) <= new Date(filters.lastSyncDateEnd))
+                ) : true)
+            );
         });
 
         currentPage = 1;
+        updateExcludeFilter();
         renderPage();
     }
 
-    // Ordena dispositivos
     function sortDevices(key) {
-        if (sortKey === key) {
-            sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-        } else {
+        if (sortKey === key) sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+        else {
             sortKey = key;
             sortOrder = 'asc';
         }
-        document.getElementById('sortSelect').value = key;
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect) sortSelect.value = key;
         filteredDevices.sort((a, b) => {
-            let aValue = a[sortKey];
-            let bValue = b[sortKey];
+            let aValue = a[sortKey] || '';
+            let bValue = b[sortKey] || '';
             if (sortKey === 'lastSyncDateTime' && aValue !== "N/A" && bValue !== "N/A") {
                 aValue = new Date(aValue);
                 bValue = new Date(bValue);
-            } else if (sortKey === 'totalStorageGB' || sortKey === 'freeStorageGB') {
-                aValue = parseFloat(aValue);
-                bValue = parseFloat(bValue);
+            } else if (['totalStorageGB', 'freeStorageGB'].includes(sortKey)) {
+                aValue = parseFloat(aValue) || 0;
+                bValue = parseFloat(bValue) || 0;
             } else {
                 aValue = aValue.toString().toLowerCase();
                 bValue = bValue.toString().toLowerCase();
@@ -287,172 +419,192 @@
             if (aValue === "N/A" || bValue === "N/A") {
                 return aValue === bValue ? 0 : aValue === "N/A" ? 1 : -1;
             }
-            if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-            if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-            return 0;
+            return sortOrder === 'asc' ? aValue > bValue ? 1 : -1 : aValue < bValue ? 1 : -1;
         });
         renderPage();
     }
 
-    // Limpa filtros
     function clearFilters() {
-        document.getElementById('deviceNameFilter').value = '';
-        document.getElementById('userPrincipalNameFilter').value = '';
-        document.getElementById('operatingSystemFilter').value = '';
-        document.getElementById('osVersionFilter').value = '';
-        document.getElementById('manufacturerFilter').value = '';
-        document.getElementById('modelFilter').value = '';
-        document.getElementById('serialNumberFilter').value = '';
-        document.getElementById('lastSyncDateStart').value = '';
-        document.getElementById('lastSyncDateEnd').value = '';
-        document.getElementById('complianceStateFilter').value = '';
-        document.getElementById('totalStorageMin').value = '';
-        document.getElementById('totalStorageMax').value = '';
-        document.getElementById('freeStorageMin').value = '';
-        document.getElementById('freeStorageMax').value = '';
-        document.querySelectorAll('input').forEach(input => input.classList.remove('invalid'));
+        document.querySelectorAll('#filterPanel input, #filterPanel select').forEach(el => {
+            el.value = '';
+            el.classList.remove('invalid');
+        });
         applyFilters();
     }
 
-    // Aplica seleção de colunas
     function applyColumns() {
         visibleColumns = Array.from(document.querySelectorAll('.column-toggle:checked')).map(cb => cb.dataset.column);
-        saveVisibleColumns();
+        localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
         renderPage();
     }
 
-    // Fecha dropdowns ao clicar fora
-    function closeDropdowns(event) {
-        const dropdowns = document.querySelectorAll('.dropdown-content');
-        dropdowns.forEach(panel => {
-            const card = panel.closest('.control-card');
-            if (!card.contains(event.target)) {
-                panel.classList.add('hidden');
-                card.classList.remove('is-active');
-                const button = card.querySelector('.btn');
-                const arrow = button.querySelector('.arrow');
-                if (arrow) {
-                    arrow.style.transform = 'rotate(0deg)';
+    function toggleDropdown(buttonId, panelId) {
+        const button = document.getElementById(buttonId);
+        const panel = document.getElementById(panelId);
+        if (!button || !panel) return;
+        const isHidden = panel.classList.contains('hidden');
+        document.querySelectorAll('.dropdown-content').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.btn').forEach(b => {
+            b.classList.remove('active');
+            if (b.querySelector('.arrow')) b.querySelector('.arrow').style.transform = 'rotate(0deg)';
+        });
+        panel.classList.toggle('hidden', !isHidden);
+        button.classList.toggle('active', isHidden);
+        if (button.querySelector('.arrow')) {
+            button.querySelector('.arrow').style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+    }
+
+    // Event Listeners
+    function initializeEventListeners() {
+        const toggleChartConfig = document.getElementById('toggleChartConfig');
+        const addChart = document.getElementById('addChart');
+        const toggleFilters = document.getElementById('toggleFilters');
+        const toggleColumns = document.getElementById('toggleColumns');
+        const applyFiltersBtn = document.getElementById('applyFilters');
+        const clearFiltersBtn = document.getElementById('clearFilters');
+        const applyColumnsBtn = document.getElementById('applyColumns');
+        const toggleView = document.getElementById('toggleView');
+        const prevPage = document.getElementById('prevPage');
+        const nextPage = document.getElementById('nextPage');
+        const sortSelect = document.getElementById('sortSelect');
+        const chartXField = document.getElementById('chartXField');
+
+        if (toggleChartConfig) {
+            toggleChartConfig.addEventListener('click', () => toggleDropdown('toggleChartConfig', 'chartConfigPanel'));
+        }
+        if (addChart) {
+            addChart.addEventListener('click', () => {
+                const chartType = document.getElementById('chartType')?.value;
+                const xField = document.getElementById('chartXField')?.value;
+                const yField = document.getElementById('chartYField')?.value;
+                const aggregation = document.getElementById('chartAggregation')?.value;
+                const excludeValues = Array.from(document.getElementById('chartExcludeValues')?.selectedOptions || []).map(opt => opt.value);
+                const chartColor = document.getElementById('chartColor')?.value;
+                const chartTitle = document.getElementById('chartTitle')?.value;
+                if (chartType && xField && yField && aggregation && chartColor) {
+                    createChart({
+                        type: chartType,
+                        xField,
+                        yField,
+                        aggregation,
+                        excludeValues,
+                        color: chartColor,
+                        title: chartTitle || `${yField} por ${xField}`
+                    });
+                    toggleDropdown('toggleChartConfig', 'chartConfigPanel');
+                } else {
+                    const errorMsg = document.getElementById('chartError');
+                    if (errorMsg) {
+                        errorMsg.textContent = 'Por favor, preencha todos os campos obrigatórios.';
+                        setTimeout(() => errorMsg.textContent = '', 3000);
+                    }
                 }
-                button.classList.remove('active');
+            });
+        }
+        if (chartXField) {
+            chartXField.addEventListener('change', updateExcludeFilter);
+        }
+        if (toggleFilters) {
+            toggleFilters.addEventListener('click', () => toggleDropdown('toggleFilters', 'filterPanel'));
+        }
+        if (toggleColumns) {
+            toggleColumns.addEventListener('click', () => toggleDropdown('toggleColumns', 'columnPanel'));
+        }
+        if (applyFiltersBtn) {
+            applyFiltersBtn.addEventListener('click', applyFilters);
+        }
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', clearFilters);
+        }
+        if (applyColumnsBtn) {
+            applyColumnsBtn.addEventListener('click', applyColumns);
+        }
+        if (toggleView) {
+            toggleView.addEventListener('click', () => {
+                isGridView = !isGridView;
+                toggleView.innerHTML = `
+                    <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="${isGridView ? 'M3 6h18M6 12h12M9 18h6' : 'M12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6'}"></path>
+                    </svg>
+                    Ver como ${isGridView ? 'Lista' : 'Grade'}
+                `;
+                renderPage();
+            });
+        }
+        if (prevPage) {
+            prevPage.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderPage();
+                }
+            });
+        }
+        if (nextPage) {
+            nextPage.addEventListener('click', () => {
+                if (currentPage < Math.ceil(filteredDevices.length / rowsPerPage)) {
+                    currentPage++;
+                    renderPage();
+                }
+            });
+        }
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => sortDevices(e.target.value));
+        }
+        document.querySelectorAll('th').forEach(th => {
+            th.addEventListener('click', () => {
+                if (th.dataset.column) sortDevices(th.dataset.column);
+            });
+        });
+
+        const debouncedApplyFilters = debounce(applyFilters, 300);
+        ['deviceNameFilter', 'userPrincipalNameFilter', 'osVersionFilter', 'serialNumberFilter'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) input.addEventListener('input', debouncedApplyFilters);
+        });
+        ['operatingSystemFilter', 'manufacturerFilter', 'modelFilter', 'complianceStateFilter', 'lastSyncDateStart', 'lastSyncDateEnd'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) input.addEventListener('change', applyFilters);
+        });
+        ['totalStorageMin', 'totalStorageMax', 'freeStorageMin', 'freeStorageMax'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('input', (e) => {
+                    validateNumberInput(e.target);
+                    debouncedApplyFilters();
+                });
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.control-card')) {
+                document.querySelectorAll('.dropdown-content').forEach(p => p.classList.add('hidden'));
+                document.querySelectorAll('.btn').forEach(b => {
+                    b.classList.remove('active');
+                    if (b.querySelector('.arrow')) b.querySelector('.arrow').style.transform = 'rotate(0deg)';
+                });
             }
         });
     }
 
-    // Adiciona eventos
-    const debouncedApplyFilters = debounce(applyFilters, 300);
-    document.getElementById('applyFilters').addEventListener('click', applyFilters);
-    document.getElementById('clearFilters').addEventListener('click', clearFilters);
-    document.getElementById('deviceNameFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('userPrincipalNameFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('osVersionFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('serialNumberFilter').addEventListener('input', debouncedApplyFilters);
-    document.getElementById('operatingSystemFilter').addEventListener('change', applyFilters);
-    document.getElementById('manufacturerFilter').addEventListener('change', applyFilters);
-    document.getElementById('modelFilter').addEventListener('change', applyFilters);
-    document.getElementById('complianceStateFilter').addEventListener('change', applyFilters);
-    document.getElementById('lastSyncDateStart').addEventListener('change', applyFilters);
-    document.getElementById('lastSyncDateEnd').addEventListener('change', applyFilters);
-    document.getElementById('totalStorageMin').addEventListener('input', (e) => {
-        validateNumberInput(e.target);
-        debouncedApplyFilters();
-    });
-    document.getElementById('totalStorageMax').addEventListener('input', (e) => {
-        validateNumberInput(e.target);
-        debouncedApplyFilters();
-    });
-    document.getElementById('freeStorageMin').addEventListener('input', (e) => {
-        validateNumberInput(e.target);
-        debouncedApplyFilters();
-    });
-    document.getElementById('freeStorageMax').addEventListener('input', (e) => {
-        validateNumberInput(e.target);
-        debouncedApplyFilters();
-    });
-    document.getElementById('sortSelect').addEventListener('change', () => sortDevices(document.getElementById('sortSelect').value));
-    document.getElementById('toggleView').addEventListener('click', () => {
-        isGridView = !isGridView;
-        document.getElementById('toggleView').innerHTML = `
-            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="${isGridView ? 'M3 6h18M6 12h12M9 18h6' : 'M12 2l10 6-10 6-10-6 10-6zM2 12l10 6 10-6'}"></path>
-            </svg>
-            Ver como ${isGridView ? 'Lista' : 'Grade'}
-        `;
-        renderPage();
-    });
-    document.getElementById('prevPage').addEventListener('click', () => {
-        if (currentPage > 1) {
-            currentPage--;
-            renderPage();
-        }
-    });
-    document.getElementById('nextPage').addEventListener('click', () => {
-        const totalPages = Math.ceil(filteredDevices.length / rowsPerPage);
-        if (currentPage < totalPages) {
-            currentPage++;
-            renderPage();
-        }
-    });
-
-    // Gerencia dropdowns de filtros
-    document.getElementById('toggleFilters').addEventListener('click', (e) => {
-        e.preventDefault();
-        const panel = document.getElementById('filterPanel');
-        const button = e.currentTarget;
-        const card = button.closest('.control-card');
-        const otherPanel = document.getElementById('columnPanel');
-
-        // Fecha o outro dropdown
-        otherPanel.classList.add('hidden');
-        document.getElementById('toggleColumns').classList.remove('active');
-        document.getElementById('toggleColumns').closest('.control-card').classList.remove('is-active');
-        document.getElementById('toggleColumns').querySelector('.arrow').style.transform = 'rotate(0deg)';
-
-        // Alterna o dropdown atual
-        panel.classList.toggle('hidden');
-        const isHidden = panel.classList.contains('hidden');
-        button.classList.toggle('active', !isHidden);
-        card.classList.toggle('is-active', !isHidden);
-        button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-    });
-
-    // Gerencia dropdowns de colunas
-    document.getElementById('toggleColumns').addEventListener('click', (e) => {
-        e.preventDefault();
-        const panel = document.getElementById('columnPanel');
-        const button = e.currentTarget;
-        const card = button.closest('.control-card');
-        const otherPanel = document.getElementById('filterPanel');
-
-        // Fecha o outro dropdown
-        otherPanel.classList.add('hidden');
-        document.getElementById('toggleFilters').classList.remove('active');
-        document.getElementById('toggleFilters').closest('.control-card').classList.remove('is-active');
-        document.getElementById('toggleFilters').querySelector('.arrow').style.transform = 'rotate(0deg)';
-
-        // Alterna o dropdown atual
-        panel.classList.toggle('hidden');
-        const isHidden = panel.classList.contains('hidden');
-        button.classList.toggle('active', !isHidden);
-        card.classList.toggle('is-active', !isHidden);
-        button.querySelector('.arrow').style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
-    });
-
-    document.getElementById('applyColumns').addEventListener('click', applyColumns);
-    document.querySelectorAll('th').forEach(th => {
-        th.addEventListener('click', () => {
-            const column = th.dataset.column;
-            if (column) sortDevices(column);
-        });
-    });
-
-    document.addEventListener('click', closeDropdowns);
-
-    // Inicialização
+    // Initialize
     window.onload = () => {
-        populateDropdowns();
-        loadVisibleColumns();
-        renderPage();
-        document.querySelectorAll('.animate-fade').forEach(el => el.classList.add('visible'));
+        try {
+            initializeParticleEffects();
+            populateDropdowns();
+            if (localStorage.getItem('visibleColumns')) {
+                visibleColumns = JSON.parse(localStorage.getItem('visibleColumns'));
+                document.querySelectorAll('.column-toggle').forEach(cb => {
+                    if (cb.dataset.column) cb.checked = visibleColumns.includes(cb.dataset.column);
+                });
+            }
+            initializeEventListeners();
+            updateExcludeFilter();
+            renderPage();
+        } catch (e) {
+            console.error(`Erro na inicialização: ${e.message}`);
+            showLoading(false);
+            document.getElementById('loading').innerHTML = 'Erro ao inicializar a página.';
+        }
     };
 })();
